@@ -144,6 +144,50 @@ main { display: flex; flex: 1; overflow: hidden; }
 .settings-section + .settings-section { border-top: 1px solid var(--border); }
 .section-title { font-size: 13px; color: var(--text-dim); margin-bottom: 12px; font-weight: 500; letter-spacing: 0.5px; }
 
+/* 设置标签栏 */
+.settings-tabs { display: flex; border-bottom: 1px solid var(--border); padding: 0 24px; }
+.settings-tab {
+  padding: 12px 20px; background: transparent; border: none; color: var(--text-dim);
+  cursor: pointer; font-size: 14px; border-bottom: 2px solid transparent;
+}
+.settings-tab:hover { color: var(--text); }
+.settings-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+.settings-tab-content { display: none; }
+.settings-tab-content.active { display: block; }
+
+/* 角色/插件配置卡片 */
+.config-card {
+  background: var(--surface2); border: 1px solid var(--border); border-radius: 8px;
+  padding: 12px 14px; margin-bottom: 10px;
+}
+.config-card-header { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.config-card-header .config-icon { font-size: 18px; }
+.config-card-header .config-name { flex: 1; font-size: 14px; font-weight: 500; }
+.config-card-header .config-type { font-size: 12px; color: var(--text-dim); }
+.config-card-body { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.config-field { display: flex; flex-direction: column; gap: 3px; }
+.config-field label { font-size: 11px; color: var(--text-dim); }
+.config-field input, .config-field select {
+  padding: 5px 8px; background: var(--bg); border: 1px solid var(--border);
+  border-radius: 4px; color: var(--text); font-size: 12px;
+}
+.config-card-actions { display: flex; gap: 8px; margin-top: 8px; }
+.btn-add-role {
+  padding: 8px 16px; background: var(--bg); color: var(--accent);
+  border: 1px dashed var(--border); border-radius: 6px; cursor: pointer; font-size: 13px;
+  width: 100%; margin-top: 8px;
+}
+.btn-add-role:hover { border-color: var(--accent); }
+.btn-toggle {
+  padding: 4px 12px; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;
+}
+.btn-toggle.on { background: var(--accent2); color: var(--bg); }
+.btn-toggle.off { background: var(--surface); color: var(--text-dim); border: 1px solid var(--border); }
+.btn-save-config {
+  padding: 6px 14px; background: var(--accent); color: white;
+  border: none; border-radius: 5px; cursor: pointer; font-size: 13px;
+}
+
 /* 状态指示灯 */
 .status-dot {
   width: 10px; height: 10px; border-radius: 50%; background: var(--text-dim);

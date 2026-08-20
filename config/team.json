@@ -1,0 +1,80 @@
+{
+  "roles": [
+    {
+      "id": "designer",
+      "label": "策划",
+      "icon": "📋",
+      "llm": "cloud",
+      "kind": "generator",
+      "prompt": "designer",
+      "outputs": ["gdd", "manifest", "art_spec"],
+      "next": "supervisor",
+      "validate": true,
+      "tools": []
+    },
+    {
+      "id": "supervisor",
+      "label": "监理",
+      "icon": "🔍",
+      "llm": "none",
+      "kind": "validator",
+      "inputs": ["gdd", "manifest", "art_spec"],
+      "next_on_pass": "artist3d",
+      "next_on_fail": "designer",
+      "max_retries": 3,
+      "tools": []
+    },
+    {
+      "id": "artist3d",
+      "label": "3D美术",
+      "icon": "🎨",
+      "llm": "local",
+      "kind": "producer",
+      "plugin": "blender",
+      "chain": "produce_model",
+      "asset_type": "model",
+      "output_dir": "game/assets/models",
+      "gold_sample": true,
+      "next": "artist2d",
+      "tools": []
+    },
+    {
+      "id": "artist2d",
+      "label": "2D美术",
+      "icon": "🖌",
+      "llm": "local",
+      "kind": "producer",
+      "plugin": "krita",
+      "chain": "produce_texture",
+      "asset_types": ["texture", "ui"],
+      "output_dir": "game/assets/textures",
+      "gold_sample": true,
+      "next": "coder",
+      "tools": []
+    },
+    {
+      "id": "coder",
+      "label": "程序",
+      "icon": "💻",
+      "llm": "cloud",
+      "kind": "builder",
+      "plugin": "godot",
+      "chain": "build_game",
+      "build_output": "game/build/windows",
+      "next": "qa",
+      "tools": []
+    },
+    {
+      "id": "qa",
+      "label": "测试",
+      "icon": "🧪",
+      "llm": "local",
+      "kind": "tester",
+      "plugin": "godot",
+      "chain": "test_game",
+      "next_on_pass": "release",
+      "next_on_fail": "coder",
+      "tools": []
+    }
+  ]
+}

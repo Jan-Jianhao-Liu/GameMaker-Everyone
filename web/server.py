@@ -181,6 +181,52 @@ def create_app(
     async def list_sessions() -> dict:
         return {"sessions": manager.all_ids()}
 
+    @app.get("/api/config/team")
+    async def get_team_config() -> dict:
+        from agents.team_config import TeamConfig
+
+        team = TeamConfig()
+        team.load()
+        return {"roles": [r.to_dict() for r in team.roles()]}
+
+    @app.put("/api/config/team")
+    async def save_team_config(body: dict) -> dict:
+        import json as _json
+
+        from agents.team_config import TeamConfig
+
+        team = TeamConfig()
+        team.load()
+        path = team._config_dir / "team.json"  # noqa: SLF001
+        path.write_text(_json.dumps(body, ensure_ascii=False, indent=2), encoding="utf-8")
+        return {"status": "ok"}
+
+    @app.get("/api/config/plugins")
+    async def get_plugins_config() -> dict:
+        import json as _json
+
+        from plugins.registry import PluginRegistry
+
+        reg = PluginRegistry()
+        reg.load()
+        path = reg._config_dir / "plugins.json"  # noqa: SLF001
+        if path.exists():
+            return {"plugins": _json.loads(path.read_text(encoding="utf-8"))}
+        return {"plugins": []}
+
+    @app.put("/api/config/plugins")
+    async def save_plugins_config(body: dict) -> dict:
+        import json as _json
+
+        from plugins.registry import PluginRegistry
+
+        reg = PluginRegistry()
+        reg.load()
+        path = reg._config_dir / "plugins.json"  # noqa: SLF001
+        plugins = body.get("plugins", body)
+        path.write_text(_json.dumps(plugins, ensure_ascii=False, indent=2), encoding="utf-8")
+        return {"status": "ok"}
+
     @app.websocket("/ws")
     async def websocket_endpoint(websocket: WebSocket) -> None:
         await websocket.accept()

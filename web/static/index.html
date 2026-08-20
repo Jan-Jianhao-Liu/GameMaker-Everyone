@@ -47,9 +47,53 @@
   <div id="settings-modal" class="modal-overlay" style="display:none">
     <div class="modal modal-wide">
       <div class="modal-header">
-        <h2>⚙ 设置 — LLM 服务配置</h2>
+        <h2>⚙ 设置</h2>
         <button class="modal-x" id="settings-close" title="关闭">✕</button>
       </div>
+      <div class="settings-tabs">
+        <button class="settings-tab active" data-tab="llm">LLM 配置</button>
+        <button class="settings-tab" data-tab="team">团队配置</button>
+        <button class="settings-tab" data-tab="plugins">插件管理</button>
+      </div>
+
+      <div class="settings-tab-content active" id="tab-llm">
+        <p class="modal-desc">
+          本地 <strong>Ollama</strong> 用于美术/测试角色（无需 API Key）；
+          云端 <strong>Provider</strong> 用于策划/监理/程序角色（需 API Key）。
+        </p>
+        <div class="settings-section">
+          <h3 class="section-title">🖥 本地 Ollama</h3>
+          <div id="ollama-card" class="ollama-card">
+            <div class="ollama-header">
+              <span class="status-dot" id="ollama-dot"></span>
+              <span id="ollama-status-text">检测中...</span>
+              <button class="btn-refresh" id="ollama-refresh">刷新</button>
+            </div>
+            <div class="model-tags" id="ollama-models"></div>
+          </div>
+        </div>
+        <div class="settings-section">
+          <h3 class="section-title">☁ 云端 Provider</h3>
+          <div id="provider-cards"></div>
+        </div>
+      </div>
+
+      <div class="settings-tab-content" id="tab-team">
+        <p class="modal-desc">配置智能体团队角色。每个角色可设置 LLM、插件、工具链、流转关系。</p>
+        <div class="settings-section">
+          <div id="team-roles-list"></div>
+          <button class="btn-add-role" id="add-role-btn">+ 添加角色</button>
+        </div>
+      </div>
+
+      <div class="settings-tab-content" id="tab-plugins">
+        <p class="modal-desc">管理可插拔的引擎/编辑器/工具插件。禁用的插件不会被流水线调用。</p>
+        <div class="settings-section">
+          <div id="plugins-list"></div>
+        </div>
+      </div>
+    </div>
+  </div>
       <p class="modal-desc">
         本地 <strong>Ollama</strong> 用于美术/测试角色（无需 API Key）；
         云端 <strong>Provider</strong> 用于策划/监理/程序角色（需 API Key）。
