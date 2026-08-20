@@ -18,6 +18,7 @@ from jsonschema import ValidationError
 
 from agents.common.deps import AgentDeps
 from agents.common.state import AgentState
+from agents.team_config import RoleConfig
 from contracts.validators import (
     CircularDependencyError,
     validate_art_spec,
@@ -49,7 +50,9 @@ def _validate_all(state: AgentState) -> list[str]:
     return errors
 
 
-def make_supervisor_node(deps: AgentDeps) -> Callable[[AgentState], dict]:
+def make_supervisor_node(
+    deps: AgentDeps, role_config: RoleConfig | None = None,
+) -> Callable[[AgentState], dict]:
     """构造 supervisor 节点函数。"""
 
     def supervisor_node(state: AgentState) -> dict:

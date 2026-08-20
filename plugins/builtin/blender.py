@@ -26,10 +26,10 @@ class BlenderPlugin(PluginBase):
     def tool_chains(self) -> dict[str, ToolChain]:
         return {
             "produce_model": ToolChain("produce_model", [
-                {"tool": "create_primitive", "params": {"prim_type": "CUBE", "dimensions": [1, 1, 1]}},
-                {"tool": "auto_uv", "params": {}},
-                {"tool": "assign_material", "params": {"base_color": [0.8, 0.8, 0.8, 1], "roughness": 0.5, "metallic": 0.0}},
-                {"tool": "export_fbx", "params": {}},
-                {"tool": "validate_export", "params": {}},
+                {"tool": "create_primitive", "params": {"prim_type": "CUBE", "name": "{asset_id}", "dimensions": [1, 1, 1]}},
+                {"tool": "auto_uv", "params": {"asset_id": "{asset_id}"}},
+                {"tool": "assign_material", "params": {"asset_id": "{asset_id}", "base_color": [0.8, 0.8, 0.8, 1], "roughness": 0.5, "metallic": 0.0}},
+                {"tool": "export_fbx", "params": {"asset_id": "{asset_id}", "path": "{out_path}"}},
+                {"tool": "validate_export", "params": {"path": "{out_path}"}},
             ]),
         }

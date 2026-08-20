@@ -20,6 +20,7 @@ from jsonschema import ValidationError
 from agents.common.deps import AgentDeps
 from agents.common.json_utils import extract_json
 from agents.common.state import AgentState
+from agents.team_config import RoleConfig
 from contracts.validators import (
     CircularDependencyError,
     validate_art_spec,
@@ -94,7 +95,9 @@ def _validate_all(gdd: dict, manifest: dict, art_spec: dict) -> list[str]:
     return errors
 
 
-def make_designer_node(deps: AgentDeps) -> Callable[[AgentState], dict]:
+def make_designer_node(
+    deps: AgentDeps, role_config: RoleConfig | None = None,
+) -> Callable[[AgentState], dict]:
     """构造 designer 节点函数。内部自带校验+重试循环。"""
 
     def designer_node(state: AgentState) -> dict:
