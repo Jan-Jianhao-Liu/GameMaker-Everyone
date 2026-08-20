@@ -1,0 +1,38 @@
+[
+  {
+    "id": "blender",
+    "class": "plugins.builtin.blender.BlenderPlugin",
+    "name": "Blender 4.2",
+    "type": "3d_editor",
+    "port": 19876,
+    "enabled": true,
+    "config": {}
+  },
+  {
+    "id": "krita",
+    "class": "plugins.builtin.krita.KritaPlugin",
+    "name": "Krita",
+    "type": "2d_editor",
+    "port": 19878,
+    "enabled": true,
+    "config": {}
+  },
+  {
+    "id": "godot",
+    "class": "plugins.builtin.godot.GodotPlugin",
+    "name": "Godot 4.4",
+    "type": "game_engine",
+    "port": 19877,
+    "enabled": true,
+    "config": {}
+  },
+  {
+    "id": "git",
+    "class": "plugins.builtin.git.GitPlugin",
+    "name": "Git LFS",
+    "type": "vcs",
+    "port": 19879,
+    "enabled": true,
+    "config": {}
+  }
+]

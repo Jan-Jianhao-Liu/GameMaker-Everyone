@@ -218,10 +218,170 @@ function openSettings() {
   renderProviderCards();
   document.getElementById("settings-modal").style.display = "flex";
   requestOllamaStatus();
+  loadTeamConfig();
+  loadPluginsConfig();
+  document.querySelectorAll(".settings-tab").forEach(tab => {
+    tab.onclick = () => switchSettingsTab(tab.dataset.tab);
+  });
+}
+
+function switchSettingsTab(name) {
+  document.querySelectorAll(".settings-tab").forEach(t => t.classList.remove("active"));
+  document.querySelectorAll(".settings-tab-content").forEach(c => c.classList.remove("active"));
+  document.querySelector(`.settings-tab[data-tab="${name}"]`).classList.add("active");
+  document.getElementById(`tab-${name}`).classList.add("active");
 }
 
 function closeSettings() {
   document.getElementById("settings-modal").style.display = "none";
+}
+
+/* ---------- 团队配置 ---------- */
+
+let _teamRoles = [];
+
+async function loadTeamConfig() {
+  try {
+    const r = await fetch("/api/config/team");
+    const data = await r.json();
+    _teamRoles = data.roles || [];
+    renderTeamRoles();
+  } catch (e) { console.error("加载团队配置失败:", e); }
+}
+
+function renderTeamRoles() {
+  const container = document.getElementById("team-roles-list");
+  container.innerHTML = "";
+  for (const role of _teamRoles) {
+    const card = document.createElement("div");
+    card.className = "config-card";
+    card.innerHTML = `
+      <div class="config-card-header">
+        <span class="config-icon">${role.icon || "🤖"}</span>
+        <span class="config-name">${role.label || role.id}</span>
+        <span class="config-type">${role.kind || ""} → ${role.next || role.next_on_pass || "END"}</span>
+      </div>
+      <div class="config-card-body">
+        <div class="config-field"><label>ID</label><input type="text" data-key="id" value="${role.id}"></div>
+        <div class="config-field"><label>显示名</label><input type="text" data-key="label" value="${role.label || ""}"></div>
+        <div class="config-field"><label>图标</label><input type="text" data-key="icon" value="${role.icon || ""}"></div>
+        <div class="config-field"><label>LLM</label>
+          <select data-key="llm">
+            <option value="cloud"${role.llm==="cloud"?" selected":""}>云端</option>
+            <option value="local"${role.llm==="local"?" selected":""}>本地</option>
+            <option value="none"${role.llm==="none"?" selected":""}>不用</option>
+          </select></div>
+        <div class="config-field"><label>类型</label><input type="text" data-key="kind" value="${role.kind || ""}"></div>
+        <div class="config-field"><label>下一个角色</label><input type="text" data-key="next" value="${role.next || ""}"></div>
+        <div class="config-field"><label>插件</label><input type="text" data-key="plugin" value="${role.plugin || ""}"></div>
+        <div class="config-field"><label>工具链</label><input type="text" data-key="chain" value="${role.chain || ""}"></div>
+      </div>
+      <div class="config-card-actions">
+        <button class="btn-save-config" data-save-role="${role.id}">保存</button>
+        <button class="btn-toggle off" data-del-role="${role.id}">删除</button>
+      </div>`;
+    container.appendChild(card);
+  }
+  container.querySelectorAll("[data-save-role]").forEach(btn => {
+    btn.onclick = () => saveRole(btn.dataset.saveRole);
+  });
+  container.querySelectorAll("[data-del-role]").forEach(btn => {
+    btn.onclick = () => deleteRole(btn.dataset.delRole);
+  });
+  document.getElementById("add-role-btn").onclick = addRole;
+}
+
+function readRoleForm(card) {
+  const role = {};
+  card.querySelectorAll("[data-key]").forEach(el => { role[el.dataset.key] = el.value; });
+  return role;
+}
+
+async function saveRole(roleId) {
+  const card = document.querySelector(`[data-save-role="${roleId}"]`).closest(".config-card");
+  const updated = readRoleForm(card);
+  const idx = _teamRoles.findIndex(r => r.id === roleId);
+  if (idx >= 0) _teamRoles[idx] = { ..._teamRoles[idx], ...updated };
+  await fetch("/api/config/team", {
+    method: "PUT", headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({roles: _teamRoles}),
+  });
+  addSystem(`✓ 角色 ${roleId} 已保存`);
+}
+
+async function deleteRole(roleId) {
+  _teamRoles = _teamRoles.filter(r => r.id !== roleId);
+  await fetch("/api/config/team", {
+    method: "PUT", headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({roles: _teamRoles}),
+  });
+  renderTeamRoles();
+  addSystem(`✓ 角色 ${roleId} 已删除`);
+}
+
+async function addRole() {
+  const newRole = {id: `role_${Date.now().toString(36)}`, label: "新角色", icon: "🤖", llm: "local", kind: "custom", next: ""};
+  _teamRoles.push(newRole);
+  await fetch("/api/config/team", {
+    method: "PUT", headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({roles: _teamRoles}),
+  });
+  renderTeamRoles();
+}
+
+/* ---------- 插件管理 ---------- */
+
+let _plugins = [];
+
+async function loadPluginsConfig() {
+  try {
+    const r = await fetch("/api/config/plugins");
+    const data = await r.json();
+    _plugins = data.plugins || [];
+    renderPlugins();
+  } catch (e) { console.error("加载插件配置失败:", e); }
+}
+
+function renderPlugins() {
+  const container = document.getElementById("plugins-list");
+  container.innerHTML = "";
+  for (const p of _plugins) {
+    const card = document.createElement("div");
+    card.className = "config-card";
+    card.innerHTML = `
+      <div class="config-card-header">
+        <span class="config-icon">🔌</span>
+        <span class="config-name">${p.name || p.id}</span>
+        <span class="config-type">${p.type || ""} :${p.port || ""}</span>
+        <button class="btn-toggle ${p.enabled ? "on" : "off"}" data-toggle-plugin="${p.id}">${p.enabled ? "已启用" : "已禁用"}</button>
+      </div>
+      <div class="config-card-body">
+        <div class="config-field"><label>ID</label><input type="text" data-key="id" value="${p.id}"></div>
+        <div class="config-field"><label>名称</label><input type="text" data-key="name" value="${p.name || ""}"></div>
+        <div class="config-field"><label>类型</label>
+          <select data-key="type">
+            ${["3d_editor","2d_editor","game_engine","vcs","custom"].map(t =>
+              `<option value="${t}"${p.type===t?" selected":""}>${t}</option>`).join("")}
+          </select></div>
+        <div class="config-field"><label>端口</label><input type="number" data-key="port" value="${p.port || ""}"></div>
+      </div>`;
+    container.appendChild(card);
+  }
+  container.querySelectorAll("[data-toggle-plugin]").forEach(btn => {
+    btn.onclick = () => togglePlugin(btn.dataset.togglePlugin);
+  });
+}
+
+async function togglePlugin(pluginId) {
+  const p = _plugins.find(x => x.id === pluginId);
+  if (!p) return;
+  p.enabled = !p.enabled;
+  await fetch("/api/config/plugins", {
+    method: "PUT", headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({plugins: _plugins}),
+  });
+  renderPlugins();
+  addSystem(`✓ 插件 ${pluginId} 已${p.enabled ? "启用" : "禁用"}`);
 }
 
 function maskKey(key) {

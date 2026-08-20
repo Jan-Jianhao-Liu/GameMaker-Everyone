@@ -1,11 +1,11 @@
-"""LangGraph 编排器：五角色流水线。
+"""LangGraph 编排器：配置驱动的多角色流水线。
 
-图结构：
-  START → designer → route
-  supervisor / artist3d / artist2d / coder / qa → route（条件边）
+图结构由 config/team.json 动态构建：
+  START → first_role → route（条件边按 current_role 路由）
+  每个角色节点 → route
 
 route 根据 state.current_role 路由到对应节点；
-status == paused_human / completed / failed → END（人工卡点暂停或终态）。
+status == paused_human / completed / failed → END。
 
 --resume 由 SqliteSaver checkpointer 承担（按 thread_id = task_id 恢复）。
 """
@@ -27,38 +27,72 @@ from agents.common.state import AgentState
 from agents.designer.agent import make_designer_node
 from agents.qa.agent import make_qa_node
 from agents.supervisor.agent import make_supervisor_node
+from agents.team_config import TeamConfig
 
-_NODE_NAMES = {"designer", "supervisor", "artist3d", "artist2d", "coder", "qa"}
+_NODE_FACTORIES = {
+    "designer": make_designer_node,
+    "supervisor": make_supervisor_node,
+    "artist3d": make_artist3d_node,
+    "artist2d": make_artist2d_node,
+    "coder": make_coder_node,
+    "qa": make_qa_node,
+}
+
 _TERMINAL_STATUSES = {"paused_human", "completed", "failed"}
 
 
-def _route(state: AgentState) -> str:
-    """条件边路由函数。返回下一节点名或 END。"""
-    if state.get("status") in _TERMINAL_STATUSES:
+def _make_route(role_ids: set[str]):
+    """构造条件边路由函数（闭包绑定角色集合）。"""
+
+    def route(state: AgentState) -> str:
+        if state.get("status") in _TERMINAL_STATUSES:
+            return END
+        role = state.get("current_role", "")
+        if role in role_ids:
+            return role
         return END
-    role = state.get("current_role", "")
-    if role in _NODE_NAMES:
-        return role
-    return END
+
+    return route
 
 
-def build_graph(deps: AgentDeps) -> Any:
-    """构造编译后的 StateGraph。
+def _load_team(team_config: TeamConfig | None) -> TeamConfig:
+    """加载团队配置：传入则用，否则加载默认。"""
+    if team_config is not None:
+        return team_config
+    team = TeamConfig()
+    team.load()
+    return team
 
-    所有节点通过 deps 注入依赖，便于测试替换 mock。
-    """
+
+def _build_graph_impl(
+    deps: AgentDeps, team: TeamConfig, checkpointer: Any = None,
+) -> Any:
+    """图构建核心逻辑（build_graph 和 build_graph_with_checkpointer 共用）。"""
+    role_ids = set(team.ids())
+    first = team.first_role()
+    first_id = first.id if first else "designer"
+
     graph = StateGraph(AgentState)
-    graph.add_node("designer", make_designer_node(deps))
-    graph.add_node("supervisor", make_supervisor_node(deps))
-    graph.add_node("artist3d", make_artist3d_node(deps))
-    graph.add_node("artist2d", make_artist2d_node(deps))
-    graph.add_node("coder", make_coder_node(deps))
-    graph.add_node("qa", make_qa_node(deps))
+    for role in team.roles():
+        factory = _NODE_FACTORIES.get(role.id)
+        if factory is None:
+            continue
+        graph.add_node(role.id, factory(deps))
 
-    graph.add_edge(START, "designer")
-    for node in _NODE_NAMES:
-        graph.add_conditional_edges(node, _route)
+    graph.add_edge(START, first_id)
+    route = _make_route(role_ids)
+    for role in team.roles():
+        if _NODE_FACTORIES.get(role.id) is None:
+            continue
+        graph.add_conditional_edges(role.id, route)
+    if checkpointer is not None:
+        return graph.compile(checkpointer=checkpointer)
     return graph.compile()
+
+
+def build_graph(deps: AgentDeps, team_config: TeamConfig | None = None) -> Any:
+    """构造编译后的 StateGraph（配置驱动）。"""
+    return _build_graph_impl(deps, _load_team(team_config))
 
 
 def make_checkpointer(db_path: Path) -> SqliteSaver:
@@ -68,12 +102,20 @@ def make_checkpointer(db_path: Path) -> SqliteSaver:
     return SqliteSaver(conn)
 
 
+def build_graph_with_checkpointer(
+    deps: AgentDeps, checkpointer: Any, team_config: TeamConfig | None = None,
+) -> Any:
+    """构造带 checkpointer 的编译图（--resume 用，配置驱动）。"""
+    return _build_graph_impl(deps, _load_team(team_config), checkpointer)
+
+
 def run_pipeline(
     deps: AgentDeps,
     task_id: str,
     user_request: str,
     checkpoint_db: Path | None = None,
     initial_state: dict[str, Any] | None = None,
+    team_config: TeamConfig | None = None,
 ) -> AgentState:
     """运行流水线。
 
@@ -82,17 +124,17 @@ def run_pipeline(
         task_id: 任务 ID（对应 LangGraph thread_id，--resume 按此恢复）
         user_request: 用户需求文本
         checkpoint_db: checkpointer 数据库路径；None 则不用 checkpointer
-        initial_state: 恢复时注入的初始状态增量（如金样本确认后填入 gold_samples）
-
-    Returns:
-        最终状态。
+        initial_state: 恢复时注入的初始状态增量
+        team_config: 团队配置；None 则从 config/team.json 加载默认
     """
-    graph = build_graph(deps)
+    team = _load_team(team_config)
+    first = team.first_role()
+    first_id = first.id if first else "designer"
     config = {"configurable": {"thread_id": task_id}}
     state: AgentState = {
         "task_id": task_id,
         "user_request": user_request,
-        "current_role": "designer",
+        "current_role": first_id,
         "status": "running",
         "retries": {},
         "produced_assets": [],
@@ -105,27 +147,12 @@ def run_pipeline(
     if checkpoint_db is not None:
         saver = make_checkpointer(checkpoint_db)
         try:
-            graph_checkpointed = build_graph_with_checkpointer(deps, saver)
-            return graph_checkpointed.invoke(state, config=config)
+            graph = build_graph_with_checkpointer(deps, saver, team)
+            return graph.invoke(state, config=config)
         finally:
             saver.conn.close()
+    graph = build_graph(deps, team)
     return graph.invoke(state, config=config)
-
-
-def build_graph_with_checkpointer(deps: AgentDeps, checkpointer: Any) -> Any:
-    """构造带 checkpointer 的编译图（--resume 用）。"""
-    graph = StateGraph(AgentState)
-    graph.add_node("designer", make_designer_node(deps))
-    graph.add_node("supervisor", make_supervisor_node(deps))
-    graph.add_node("artist3d", make_artist3d_node(deps))
-    graph.add_node("artist2d", make_artist2d_node(deps))
-    graph.add_node("coder", make_coder_node(deps))
-    graph.add_node("qa", make_qa_node(deps))
-
-    graph.add_edge(START, "designer")
-    for node in _NODE_NAMES:
-        graph.add_conditional_edges(node, _route)
-    return graph.compile(checkpointer=checkpointer)
 
 
 def resume_pipeline(
@@ -133,19 +160,13 @@ def resume_pipeline(
     task_id: str,
     checkpoint_db: Path,
     initial_state: dict[str, Any] | None = None,
+    team_config: TeamConfig | None = None,
 ) -> AgentState:
-    """从 checkpointer 恢复流水线（--resume）。
-
-    Args:
-        deps: 智能体依赖
-        task_id: 要恢复的任务 ID
-        checkpoint_db: checkpointer 数据库路径
-        initial_state: 注入的状态增量（如人工确认后的 gold_samples / human_feedback）
-    """
+    """从 checkpointer 恢复流水线（--resume）。"""
     config = {"configurable": {"thread_id": task_id}}
     saver = make_checkpointer(checkpoint_db)
     try:
-        graph = build_graph_with_checkpointer(deps, saver)
+        graph = build_graph_with_checkpointer(deps, saver, team_config)
         resume_input = {"status": "running"}
         if initial_state:
             resume_input.update(initial_state)
