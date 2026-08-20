@@ -11,7 +11,7 @@ from agents.common.deps import AgentDeps
 from agents.common.generic_node import make_generic_node
 from agents.common.llm import HybridLLM, LLMClient
 from agents.common.state import AgentState
-from agents.orchestrator import build_graph, run_pipeline
+from agents.orchestrator import build_graph
 from agents.team_config import RoleConfig, TeamConfig
 from plugins.executor import ChainExecutor, resolve_params
 from plugins.registry import PluginRegistry
@@ -35,7 +35,9 @@ def _make_deps(repo: SQLiteRepo, gw: MagicMock | None = None) -> AgentDeps:
     llm = HybridLLM(local_client=_OkLLM(), cloud_client=_OkLLM())
     return AgentDeps(
         llm=llm, gateway=gw or _ok_gw(), repo=repo,
-        api_keys={r: f"k-{r}" for r in ("designer", "supervisor", "artist3d", "artist2d", "coder", "qa", "custom_prod")},
+        api_keys={r: f"k-{r}" for r in (
+            "designer", "supervisor", "artist3d", "artist2d", "coder", "qa", "custom_prod",
+        )},
         plugins=registry,
     )
 
