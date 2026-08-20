@@ -1,0 +1,60 @@
+# MCP 网关 + 基础设施容器化
+# Ollama 跑宿主机原生（不进容器，避免 WSL2 显存转发损耗）
+# 各 MCP Server（stdio）由网关 subprocess 拉起，Phase 4 远程多机时再独立容器化
+# 全部服务绑定 127.0.0.1 内网 IP（见 SECURITY.md）
+
+services:
+  gateway:
+    build: ../gateway
+    ports:
+      - "127.0.0.1:18080:18080"
+    environment:
+      - GATEWAY_PORT=18080
+      - GAME_DIR=/data/game
+      - OLLAMA_BASE_URL=http://host.docker.internal:11434/v1
+    volumes:
+      - ../game:/data/game
+      - ../logs:/data/logs
+      - ../mcp-servers:/data/mcp-servers
+    depends_on:
+      gitea:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import socket; socket.create_connection(('127.0.0.1',18080),timeout=2)"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  gitea:
+    image: gitea/gitea:1.22
+    ports:
+      - "127.0.0.1:13000:3000"
+      - "127.0.0.1:13022:22"
+    volumes:
+      - gitea-data:/data
+    environment:
+      - GITEA__server__LFS_START_SERVER=true
+      - GITEA__server__HTTP_ADDR=0.0.0.0
+      - GITEA__security__INSTALL_LOCK=true
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:3000/api/healthz"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # arcadedb: Phase 3 跨任务记忆图检索时启用
+  # arcadedb:
+  #   image: arcadedata/arcadedb:24.1
+  #   ports:
+  #     - "127.0.0.1:2424:2424"
+  #   healthcheck:
+  #     test: ["CMD", "curl", "-f", "http://localhost:2424/api/v1/health"]
+  #     interval: 15s
+  #     timeout: 5s
+  #     retries: 5
+
+volumes:
+  gitea-data:

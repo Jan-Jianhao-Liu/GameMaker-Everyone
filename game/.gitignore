@@ -1,0 +1,9 @@
+# Godot 编辑器生成
+.godot/
+
+# 构建产物
+build/
+
+# 系统文件
+Thumbs.db
+.DS_Store

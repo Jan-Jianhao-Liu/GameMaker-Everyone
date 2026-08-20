@@ -1,0 +1,12 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://addons/gaf_godot_mcp/input_adapter.gd" id="1_adapter"]
+
+[node name="Character" type="CharacterBody3D"]
+
+[node name="InputAdapter" type="Node" parent="."]
+script = ExtResource("1_adapter")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="."]

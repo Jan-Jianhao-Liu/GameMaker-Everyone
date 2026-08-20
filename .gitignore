@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.ruff_cache/
+.pytest_cache/
+
+# IDE / tools
+.codegraph/
+.codeartsdoer/
+.idea/
+.vscode/
+
+# Build / runtime
+*.db
+logs/
+experiment_output/
+experiment2_output/
+
+# OS
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# Experiment scripts (not part of core)
+experiment.py
+experiment2.py
+debug_*.py

@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://game-agent-factory/contracts/art-spec.schema.json",
+  "title": "美术规范 (Art Spec)",
+  "description": "美术产出的硬性规范。监理智能体据此自动拦截不合规产出。",
+  "type": "object",
+  "required": ["texture_spec", "fbx_axis", "naming_pattern", "allowed_formats"],
+  "additionalProperties": false,
+  "properties": {
+    "texture_spec": {
+      "type": "object",
+      "description": "贴图尺寸规范。宽高分别校验 2 的幂；UI 类型可走 npot 豁免。",
+      "required": ["require_power_of_two", "require_square", "npot_exception"],
+      "additionalProperties": false,
+      "properties": {
+        "require_power_of_two": {
+          "type": "boolean",
+          "description": "是否要求宽高各自为 2 的幂"
+        },
+        "require_square": {
+          "type": "boolean",
+          "description": "是否要求正方形（宽==高）"
+        },
+        "npot_exception": {
+          "type": "object",
+          "description": "NPOT 豁免规则",
+          "required": ["allowed_types", "requires_flag"],
+          "additionalProperties": false,
+          "properties": {
+            "allowed_types": {
+              "type": "array",
+              "items": {"type": "string", "enum": ["model", "texture", "ui", "audio", "anim"]},
+              "description": "允许 NPOT 的资产类型"
+            },
+            "requires_flag": {
+              "type": "boolean",
+              "description": "是否要求资产显式标记 npot=true 才豁免"
+            }
+          }
+        }
+      }
+    },
+    "fbx_axis": {
+      "type": "string",
+      "enum": ["Y_UP"],
+      "description": "FBX 轴向，固定 Y_UP"
+    },
+    "naming_pattern": {
+      "type": "string",
+      "description": "资产命名正则。四段式，类型枚举开头：^(model|texture|ui|audio|anim)_[a-z][a-z0-9]*(_[a-z][a-z0-9]*)*$",
+      "const": "^(model|texture|ui|audio|anim)_[a-z][a-z0-9]*(_[a-z][a-z0-9]*)*$"
+    },
+    "allowed_formats": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"type": "string"},
+      "description": "允许的导出格式，如 fbx/png/wav"
+    }
+  }
+}

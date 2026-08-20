@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>智能体游戏施工团队</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <div id="app">
+    <header>
+      <h1>智能体游戏施工团队</h1>
+      <div id="header-right">
+        <div id="conn-status"><span class="dot" id="conn-dot"></span><span id="conn-text">连接中...</span></div>
+        <button id="settings-btn" title="设置 API Key">⚙ 设置</button>
+      </div>
+    </header>
+    <main>
+      <section id="chat-panel">
+        <div id="messages"></div>
+        <div id="input-bar">
+          <input id="msg-input" type="text" placeholder="描述游戏需求后按回车或点击「启动开发」...（以 / 开头可对话，如 /help）" autocomplete="off">
+          <button id="make-btn" class="primary">启动开发</button>
+        </div>
+      </section>
+      <aside id="team-panel">
+        <h2>智能体团队</h2>
+        <div id="roles"></div>
+        <div id="outputs">
+          <h3>产出物</h3>
+          <div id="assets-section">
+            <h4>资产清单</h4>
+            <table id="assets-table"><thead><tr><th>ID</th><th>类型</th><th>生产者</th><th>路径</th></tr></thead><tbody></tbody></table>
+          </div>
+          <div id="build-section">
+            <h4>构建包</h4>
+            <p id="build-info">未产出</p>
+          </div>
+          <div id="defects-section">
+            <h4>缺陷报告</h4>
+            <ul id="defects-list"></ul>
+          </div>
+        </div>
+      </aside>
+    </main>
+  </div>
+  <div id="settings-modal" class="modal-overlay" style="display:none">
+    <div class="modal modal-wide">
+      <div class="modal-header">
+        <h2>⚙ 设置 — LLM 服务配置</h2>
+        <button class="modal-x" id="settings-close" title="关闭">✕</button>
+      </div>
+      <p class="modal-desc">
+        本地 <strong>Ollama</strong> 用于美术/测试角色（无需 API Key）；
+        云端 <strong>Provider</strong> 用于策划/监理/程序角色（需 API Key）。
+        点击「测试连接」验证配置，「保存」即时生效。
+      </p>
+
+      <div class="settings-section">
+        <h3 class="section-title">🖥 本地 Ollama</h3>
+        <div id="ollama-card" class="ollama-card">
+          <div class="ollama-header">
+            <span class="status-dot" id="ollama-dot"></span>
+            <span id="ollama-status-text">检测中...</span>
+            <button class="btn-refresh" id="ollama-refresh">刷新</button>
+          </div>
+          <div class="model-tags" id="ollama-models"></div>
+        </div>
+      </div>
+
+      <div class="settings-section">
+        <h3 class="section-title">☁ 云端 Provider</h3>
+        <div id="provider-cards"></div>
+      </div>
+    </div>
+  </div>
+  <script src="/static/app.js"></script>
+</body>
+</html>
