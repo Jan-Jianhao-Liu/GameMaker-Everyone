@@ -29,10 +29,10 @@ class GodotPlugin(PluginBase):
             "build_game": ToolChain("build_game", [
                 {"tool": "create_scene", "params": {"scene_name": "Main", "template": "scene_3d"}},
                 {"tool": "attach_script", "params": {"node": "Player", "script_template": "character"}},
-                {"tool": "set_level_data", "params": {}},
-                {"tool": "build_export", "params": {"platform": "windows"}},
+                {"tool": "set_level_data", "params": {"levels": "{levels}"}},
+                {"tool": "build_export", "params": {"platform": "windows", "output_path": "{build_output}"}},
             ]),
             "test_game": ToolChain("test_game", [
-                {"tool": "run_headless_test", "params": {}},
+                {"tool": "run_headless_test", "params": {"build_path": "{build_path}"}},
             ]),
         }

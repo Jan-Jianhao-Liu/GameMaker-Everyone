@@ -25,9 +25,9 @@ class KritaPlugin(PluginBase):
     def tool_chains(self) -> dict[str, ToolChain]:
         return {
             "produce_texture": ToolChain("produce_texture", [
-                {"tool": "create_canvas", "params": {"width": 256, "height": 256, "dpi": 72, "color_space": "RGBA8"}},
+                {"tool": "create_canvas", "params": {"width": "{width}", "height": "{height}", "dpi": 72, "color_space": "RGBA8"}},
                 {"tool": "fill_layer", "params": {"layer_name": "background", "color": [200, 200, 200, 255]}},
-                {"tool": "export_png", "params": {}},
-                {"tool": "validate_export", "params": {}},
+                {"tool": "export_png", "params": {"asset_id": "{asset_id}", "path": "{out_path}"}},
+                {"tool": "validate_export", "params": {"path": "{out_path}"}},
             ]),
         }

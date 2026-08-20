@@ -6,7 +6,7 @@
     "type": "3d_editor",
     "port": 19876,
     "enabled": true,
-    "config": {}
+    "config": {"executable": "D:/GameTools/blender-4.2.1-windows-x64/blender.exe"}
   },
   {
     "id": "krita",
@@ -24,7 +24,7 @@
     "type": "game_engine",
     "port": 19877,
     "enabled": true,
-    "config": {}
+    "config": {"executable": "D:/GameTools/Godot/Godot_v4.4-stable_win64_console.exe"}
   },
   {
     "id": "git",

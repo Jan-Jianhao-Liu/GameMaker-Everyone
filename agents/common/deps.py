@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from agents.common.llm import HybridLLM
     from gateway.server import Gateway
+    from plugins.registry import PluginRegistry
     from storage.sqlite_repo import SQLiteRepo
 
 
@@ -24,6 +25,7 @@ class AgentDeps:
     repo: SQLiteRepo
     api_keys: dict[str, str] = field(default_factory=dict)
     max_retries: int = 3
+    plugins: PluginRegistry | None = None
 
     def key_for(self, role: str) -> str:
         """取角色对应的 API Key（用于网关调用）。"""

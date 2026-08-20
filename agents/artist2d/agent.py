@@ -14,6 +14,8 @@ from collections.abc import Callable
 from agents.common.deps import AgentDeps
 from agents.common.state import AgentState
 from agents.common.task_lock import AssetLock, LockError
+from agents.team_config import RoleConfig
+from plugins.executor import ChainExecutor
 
 _2D_TYPES = ("texture", "ui")
 _OUTPUT_DIR = "game/assets/textures"
@@ -29,7 +31,9 @@ def _pending_2d(state: AgentState) -> list[dict]:
     ]
 
 
-def _produce_one(deps: AgentDeps, asset: dict, task_id: str) -> dict | None:
+def _produce_one(
+    deps: AgentDeps, asset: dict, task_id: str, role_config: RoleConfig | None = None,
+) -> dict | None:
     asset_id = asset["asset_id"]
     key = deps.key_for("artist2d")
     is_ui = asset.get("type") == "ui"
@@ -38,25 +42,10 @@ def _produce_one(deps: AgentDeps, asset: dict, task_id: str) -> dict | None:
 
     try:
         with AssetLock(deps.repo, asset_id, "artist2d"):
-            steps = [
-                ("create_canvas", {
-                    "width": size, "height": size, "dpi": 72, "color_space": "RGBA8",
-                }),
-                ("fill_layer", {"layer_name": "background", "color": [200, 200, 200, 255]}),
-                ("export_png", {"asset_id": asset_id, "path": out_path}),
-                ("validate_export", {"path": out_path}),
-                ("commit_asset", {
-                    "asset_id": asset_id, "file_paths": [out_path],
-                    "message": f"2D 资产 {asset_id} 入库",
-                }),
-            ]
-            for tool, params in steps:
-                r = deps.gateway.call("artist2d", key, tool, params)
-                if r.get("status") != "ok":
-                    deps.repo.save_task_memory(
-                        "artist2d", task_id, tool, "error", f"{asset_id}: {r.get('error')}"
-                    )
-                    return None
+            if not _run_produce_chain(deps, asset_id, out_path, size, key, task_id, role_config):
+                return None
+            if not _commit_asset(deps, asset_id, out_path, key, task_id):
+                return None
             deps.repo.save_task_memory(
                 "artist2d", task_id, "produce", "ok", f"{asset_id} 生产完成"
             )
@@ -69,7 +58,62 @@ def _produce_one(deps: AgentDeps, asset: dict, task_id: str) -> dict | None:
         return None
 
 
-def make_artist2d_node(deps: AgentDeps) -> Callable[[AgentState], dict]:
+def _run_produce_chain(
+    deps: AgentDeps, asset_id: str, out_path: str, size: int, key: str, task_id: str,
+    role_config: RoleConfig | None,
+) -> bool:
+    """执行生产步骤（不含 commit）。优先插件链，回退硬编码。"""
+    if deps.plugins is not None and role_config and role_config.plugin and role_config.chain:
+        executor = ChainExecutor()
+        r = executor.execute(
+            deps.plugins, role_config.plugin, role_config.chain,
+            "artist2d", key, deps.gateway,
+            {"asset_id": asset_id, "out_path": out_path, "width": size, "height": size},
+        )
+        if r["status"] != "ok":
+            deps.repo.save_task_memory(
+                "artist2d", task_id, r.get("tool", "produce"), "error",
+                f"{asset_id}: {r['error']}",
+            )
+            return False
+        return True
+
+    steps = [
+        ("create_canvas", {
+            "width": size, "height": size, "dpi": 72, "color_space": "RGBA8",
+        }),
+        ("fill_layer", {"layer_name": "background", "color": [200, 200, 200, 255]}),
+        ("export_png", {"asset_id": asset_id, "path": out_path}),
+        ("validate_export", {"path": out_path}),
+    ]
+    for tool, params in steps:
+        r = deps.gateway.call("artist2d", key, tool, params)
+        if r.get("status") != "ok":
+            deps.repo.save_task_memory(
+                "artist2d", task_id, tool, "error", f"{asset_id}: {r.get('error')}"
+            )
+            return False
+    return True
+
+
+def _commit_asset(
+    deps: AgentDeps, asset_id: str, out_path: str, key: str, task_id: str,
+) -> bool:
+    r = deps.gateway.call("artist2d", key, "commit_asset", {
+        "asset_id": asset_id, "file_paths": [out_path],
+        "message": f"2D 资产 {asset_id} 入库",
+    })
+    if r.get("status") != "ok":
+        deps.repo.save_task_memory(
+            "artist2d", task_id, "commit_asset", "error", f"{asset_id}: {r.get('error')}"
+        )
+        return False
+    return True
+
+
+def make_artist2d_node(
+    deps: AgentDeps, role_config: RoleConfig | None = None,
+) -> Callable[[AgentState], dict]:
     """构造 artist2d 节点函数。"""
 
     def artist2d_node(state: AgentState) -> dict:
@@ -97,7 +141,7 @@ def make_artist2d_node(deps: AgentDeps) -> Callable[[AgentState], dict]:
 
         produced: list[dict] = []
         for asset in pending:
-            result = _produce_one(deps, asset, task_id)
+            result = _produce_one(deps, asset, task_id, role_config)
             if result is not None:
                 produced.append(result)
         return {

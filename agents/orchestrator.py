@@ -23,6 +23,7 @@ from agents.artist2d.agent import make_artist2d_node
 from agents.artist3d.agent import make_artist3d_node
 from agents.coder.agent import make_coder_node
 from agents.common.deps import AgentDeps
+from agents.common.generic_node import make_generic_node
 from agents.common.state import AgentState
 from agents.designer.agent import make_designer_node
 from agents.qa.agent import make_qa_node
@@ -75,15 +76,14 @@ def _build_graph_impl(
     graph = StateGraph(AgentState)
     for role in team.roles():
         factory = _NODE_FACTORIES.get(role.id)
-        if factory is None:
-            continue
-        graph.add_node(role.id, factory(deps))
+        if factory is not None:
+            graph.add_node(role.id, factory(deps, role))
+        else:
+            graph.add_node(role.id, make_generic_node(deps, role))
 
     graph.add_edge(START, first_id)
     route = _make_route(role_ids)
     for role in team.roles():
-        if _NODE_FACTORIES.get(role.id) is None:
-            continue
         graph.add_conditional_edges(role.id, route)
     if checkpointer is not None:
         return graph.compile(checkpointer=checkpointer)
