@@ -17,7 +17,9 @@ from collections.abc import Callable
 from jsonschema import ValidationError
 
 from agents.common.deps import AgentDeps
+from agents.common.questioning import check_question
 from agents.common.state import AgentState
+from agents.common.thought_bus import get_bus
 from agents.team_config import RoleConfig
 from contracts.validators import (
     CircularDependencyError,
@@ -56,11 +58,16 @@ def make_supervisor_node(
     """构造 supervisor 节点函数。"""
 
     def supervisor_node(state: AgentState) -> dict:
+        bus = get_bus()
         task_id = state.get("task_id", "unknown")
+        if bus:
+            bus.think("supervisor", "审查三份契约文档...")
         errors = _validate_all(state)
         retries = dict(state.get("retries", {}))
 
         if not errors:
+            if bus:
+                bus.result("supervisor", "三份契约全部通过，进入资产生产")
             deps.repo.save_task_memory(
                 "supervisor", task_id, "review_contracts", "ok", "三份契约全部通过"
             )
@@ -70,8 +77,28 @@ def make_supervisor_node(
                 "retries": retries,
             }
 
+        if bus:
+            bus.think("supervisor", f"发现 {len(errors)} 个问题", errors=errors[:3])
+
+        answered = state.get("answered_questions", [])
+        asked_roles = {q.get("role") for q in answered}
+        if bus and "supervisor" not in asked_roles:
+            q = check_question("supervisor", state)
+            if q is not None:
+                if bus:
+                    bus.think("supervisor", "契约冲突严重，向用户追问...")
+                return {
+                    "status": "paused_question",
+                    "pause_type": "question",
+                    "current_role": "supervisor",
+                    "pending_question": q.to_dict(),
+                    "human_feedback": q.question,
+                }
+
         count = retries.get("designer", 0) + 1
         retries["designer"] = count
+        if bus:
+            bus.act("supervisor", f"退回 designer 重做（第 {count} 轮）")
         deps.repo.save_task_memory(
             "supervisor",
             task_id,
@@ -81,6 +108,8 @@ def make_supervisor_node(
         )
         if count >= deps.max_retries:
             error_lines = "\n".join(f"  • {e}" for e in errors)
+            if bus:
+                bus.error("supervisor", f"designer 连续 {count} 轮不通过，转人工")
             return {
                 "errors": errors,
                 "retries": retries,

@@ -123,6 +123,8 @@ function handleEvent(ev) {
     case "team_reply": addMessage("team", ev.text); break;
     case "role_status": updateRole(ev.role, ev.status, ev.detail); break;
     case "progress": handleProgress(ev.node, ev.update); break;
+    case "agent_thinking": handleThinking(ev.role, ev.phase, ev.message, ev); break;
+    case "agent_question": showQuestion(ev.question); break;
     case "checkpoint": showCheckpoint(ev.task_id, ev.message); break;
     case "complete": handleComplete(ev.task_id, ev.summary); break;
     case "error": addSystem(`✗ ${ev.message}`); break;
@@ -146,6 +148,104 @@ function handleProgress(node, update) {
   if (update.build_result) updateBuild(update.build_result);
   if (update.defects) updateDefects(update.defects);
   if (update.status === "paused_human") addSystem("⏸ 等待人工确认...");
+  if (update.status === "paused_question") addSystem("❓ 智能体有问题要问...");
+}
+
+const ROLE_ICONS = {designer:"📋",supervisor:"🔍",artist3d:"🎨",artist2d:"🖌",coder:"💻",qa:"🧪"};
+const PHASE_ICONS = {thinking:"💭",action:"⚡",result:"✅",error:"❌",question:"❓"};
+
+function handleThinking(role, phase, message, ev) {
+  const icon = ROLE_ICONS[role] || "🤖";
+  const phaseIcon = PHASE_ICONS[phase] || "•";
+  const roleLabel = ROLES.find(r => r.id === role)?.label || role;
+
+  let div = document.getElementById(`think-${role}`);
+  if (!div) {
+    div = document.createElement("div");
+    div.className = "think-block";
+    div.id = `think-${role}`;
+    document.getElementById("messages").appendChild(div);
+  }
+
+  const line = document.createElement("div");
+  line.className = `think-line think-${phase}`;
+  line.innerHTML = `<span class="think-icon">${icon}${phaseIcon}</span>` +
+    `<span class="think-role">${roleLabel}</span>` +
+    `<span class="think-msg"></span>`;
+  line.querySelector(".think-msg").textContent = message;
+
+  const extras = Object.keys(ev).filter(k =>
+    !["type","role","phase","message"].includes(k)
+  );
+  if (extras.length) {
+    const meta = document.createElement("span");
+    meta.className = "think-meta";
+    meta.textContent = extras.map(k => `${k}=${typeof ev[k]==='object'?JSON.stringify(ev[k]).slice(0,60):ev[k]}`).join(" ");
+    line.appendChild(meta);
+  }
+
+  div.appendChild(line);
+  scrollDown();
+}
+
+function showQuestion(question) {
+  if (question.task_id) currentTaskId = question.task_id;
+  const card = document.createElement("div");
+  card.className = "question-card";
+  const roleLabel = ROLES.find(r => r.id === question.role)?.label || question.role;
+  const icon = ROLE_ICONS[question.role] || "🤖";
+
+  let html = `<div class="question-header"><span class="q-icon">${icon}</span>` +
+    `<span class="q-role">${roleLabel}</span>` +
+    `<span class="q-title"></span></div>` +
+    `<div class="question-body"><p class="q-text"></p></div>`;
+  card.innerHTML = html;
+  card.querySelector(".q-title").textContent = question.header || "";
+  card.querySelector(".q-text").textContent = question.question || "";
+
+  const body = card.querySelector(".question-body");
+
+  if (question.options && question.options.length) {
+    const optsDiv = document.createElement("div");
+    optsDiv.className = "q-options";
+    for (const opt of question.options) {
+      const btn = document.createElement("button");
+      btn.className = "q-option";
+      btn.innerHTML = `<span class="q-opt-label"></span><span class="q-opt-desc"></span>`;
+      btn.querySelector(".q-opt-label").textContent = opt.label;
+      btn.querySelector(".q-opt-desc").textContent = opt.description || "";
+      btn.onclick = () => {
+        ws.send(JSON.stringify({
+          type: "question_response", task_id: currentTaskId,
+          feedback: opt.label, request: question.role,
+        }));
+        card.remove();
+      };
+      optsDiv.appendChild(btn);
+    }
+    body.appendChild(optsDiv);
+  }
+
+  const inputDiv = document.createElement("div");
+  inputDiv.className = "q-input-row";
+  inputDiv.innerHTML = `<input type="text" placeholder="或输入自定义回答..." class="q-input">` +
+    `<button class="q-send">发送</button>`;
+  inputDiv.querySelector(".q-send").onclick = () => {
+    const val = inputDiv.querySelector(".q-input").value.trim();
+    if (!val) return;
+    ws.send(JSON.stringify({
+      type: "question_response", task_id: currentTaskId,
+      feedback: val, request: question.role,
+    }));
+    card.remove();
+  };
+  inputDiv.querySelector(".q-input").addEventListener("keydown", (e) => {
+    if (e.key === "Enter") inputDiv.querySelector(".q-send").click();
+  });
+  body.appendChild(inputDiv);
+
+  document.getElementById("messages").appendChild(card);
+  scrollDown();
 }
 
 function showCheckpoint(taskId, message) {

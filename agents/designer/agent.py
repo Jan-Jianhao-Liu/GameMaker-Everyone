@@ -19,7 +19,9 @@ from jsonschema import ValidationError
 
 from agents.common.deps import AgentDeps
 from agents.common.json_utils import extract_json
+from agents.common.questioning import check_question
 from agents.common.state import AgentState
+from agents.common.thought_bus import get_bus
 from agents.team_config import RoleConfig
 from contracts.validators import (
     CircularDependencyError,
@@ -101,6 +103,7 @@ def make_designer_node(
     """构造 designer 节点函数。内部自带校验+重试循环。"""
 
     def designer_node(state: AgentState) -> dict:
+        bus = get_bus()
         task_id = state.get("task_id", "unknown")
         request = state.get("user_request", "")
 
@@ -110,6 +113,25 @@ def make_designer_node(
         if existing_gdd and existing_manifest and existing_art_spec:
             if not _validate_all(existing_gdd, existing_manifest, existing_art_spec):
                 return {"current_role": "supervisor", "errors": []}
+
+        answered = state.get("answered_questions", [])
+        asked_roles = {q.get("role") for q in answered}
+        if bus and "designer" not in asked_roles:
+            q = check_question("designer", state)
+            if q is not None:
+                if bus:
+                    bus.think("designer", "需求不够明确，向用户追问...")
+                return {
+                    "status": "paused_question",
+                    "pause_type": "question",
+                    "current_role": "designer",
+                    "pending_question": q.to_dict(),
+                    "human_feedback": q.question,
+                }
+
+        if bus:
+            bus.think("designer", "分析用户需求", request=request[:100])
+            bus.act("designer", "准备生成契约文档（GDD + Manifest + ArtSpec）")
 
         base_prompt = _PROMPT.format(
             request=request,
@@ -130,16 +152,22 @@ def make_designer_node(
                     prompt += "\n\n" + _FIX_PROMPT.format(
                         errors="\n".join(f"  • {e}" for e in errors)
                     )
+                if bus:
+                    bus.act("designer", f"调用 LLM 生成契约（第 {attempt + 1} 轮）")
                 text = deps.llm.chat(
                     "designer",
                     [{"role": "user", "content": prompt}],
                     temperature=0.7,
                 )
+                if bus:
+                    bus.think("designer", "LLM 返回结果，解析 JSON", length=len(text))
                 bundle = extract_json(text)
                 gdd = bundle.get("gdd", {})
                 manifest = bundle.get("manifest", {})
                 art_spec = bundle.get("art_spec", {})
             except Exception as e:  # noqa: BLE001
+                if bus:
+                    bus.error("designer", f"生成失败: {e}")
                 deps.repo.save_task_memory(
                     "designer", task_id, "generate_contracts", "error", str(e)
                 )
@@ -151,6 +179,10 @@ def make_designer_node(
 
             errors = _validate_all(gdd, manifest, art_spec)
             if not errors:
+                if bus:
+                    bus.result("designer", "三份契约校验通过",
+                               gdd_title=gdd.get("game_title", ""),
+                               assets=len(manifest.get("assets", [])))
                 deps.repo.save_task_memory(
                     "designer",
                     task_id,
@@ -165,6 +197,9 @@ def make_designer_node(
                     "current_role": "supervisor",
                     "errors": [],
                 }
+            if bus:
+                bus.think("designer", f"第 {attempt + 1} 轮校验失败，准备修复",
+                          errors=errors[:3])
             deps.repo.save_task_memory(
                 "designer",
                 task_id,
@@ -173,6 +208,8 @@ def make_designer_node(
                 f"内部第 {attempt + 1} 轮校验失败: {errors}",
             )
 
+        if bus:
+            bus.error("designer", f"{deps.max_retries} 轮均未通过，交 supervisor")
         deps.repo.save_task_memory(
             "designer",
             task_id,

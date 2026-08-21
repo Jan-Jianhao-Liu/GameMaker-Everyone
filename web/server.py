@@ -26,9 +26,12 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from agents.common.deps import AgentDeps
+from agents.common.thought_bus import ThoughtBus, set_bus
 from agents.orchestrator import build_graph_with_checkpointer, make_checkpointer
 from web.events import (
     ServerEvent,
+    agent_question,
+    agent_thinking,
     checkpoint,
     complete,
     error_event,
@@ -71,9 +74,18 @@ def _run_pipeline_thread(
         "task_id": task_id, "user_request": request,
         "current_role": "designer", "status": "running",
         "retries": {}, "produced_assets": [], "defects": [], "errors": [],
+        "answered_questions": [],
     }
     if initial_state:
         state.update(initial_state)
+
+    def _thought_emit(role: str, phase: str, data: dict) -> None:
+        msg = data.pop("message", "")
+        session.emit(agent_thinking(role, phase, msg, **data))
+
+    bus = ThoughtBus(_thought_emit)
+    deps.thought_bus = bus
+    set_bus(bus)
 
     saver = make_checkpointer(checkpoint_db)
     try:
@@ -87,19 +99,27 @@ def _run_pipeline_thread(
                 detail = _describe_update(update)
                 status = update.get("status", "")
                 errors = update.get("errors", [])
-                if status not in ("paused_human", "failed") and not errors:
+                if status not in ("paused_human", "paused_question", "failed") and not errors:
                     session.update_role(node, "done", "完成")
                     session.emit(role_status(node, "done", "完成"))
-                elif errors and status != "paused_human":
+                elif errors and status not in ("paused_human", "paused_question", "failed"):
                     session.update_role(node, "error", detail)
                     session.emit(role_status(node, "error", detail))
                 next_role = update.get("current_role", node)
-                if next_role != node and status not in ("paused_human", "failed"):
+                if next_role != node and status not in (
+                    "paused_human", "paused_question", "failed",
+                ):
                     session.update_role(next_role, "working", "处理中")
                     session.emit(role_status(next_role, "working", "处理中"))
                 session.emit(progress(node, update))
                 if status == "paused_human":
                     session.emit(checkpoint(task_id, update.get("human_feedback", "")))
+                    session.pipeline_running = False
+                    return
+                if status == "paused_question":
+                    q = update.get("pending_question", {})
+                    q["task_id"] = task_id
+                    session.emit(agent_question(q))
                     session.pipeline_running = False
                     return
                 if status == "failed":
@@ -117,6 +137,7 @@ def _run_pipeline_thread(
             saver.conn.close()
         except Exception:  # noqa: BLE001
             pass
+        set_bus(None)
         session.pipeline_running = False
 
 
@@ -279,6 +300,26 @@ def create_app(
                     else:
                         session.reply(f"已拒绝。反馈：{event.feedback or '无'}")
 
+                elif event.type == "question_response":
+                    tid = event.task_id
+                    answer = event.feedback or event.text
+                    initial = pending_checkpoints.pop(tid, {})
+                    initial["human_feedback"] = answer
+                    initial["status"] = "running"
+                    initial["answered_questions"] = [{
+                        "role": event.request or "",
+                        "answer": answer,
+                    }]
+                    initial["pending_question"] = {}
+                    deps = _deps_factory()
+                    t = threading.Thread(
+                        target=_resume_pipeline_thread,
+                        args=(session, deps, tid, initial),
+                        daemon=True,
+                    )
+                    t.start()
+                    session.reply(f"已回答：{answer[:80]}，继续执行...")
+
                 elif event.type == "resume":
                     deps = _deps_factory()
                     t = threading.Thread(
@@ -403,6 +444,14 @@ def _resume_pipeline_thread(
     session.pipeline_running = True
     checkpoint_db = _CHECKPOINT_DIR / f"{task_id}.db"
     config: dict[str, Any] = {"configurable": {"thread_id": task_id}}
+
+    def _thought_emit(role: str, phase: str, data: dict) -> None:
+        msg = data.pop("message", "")
+        session.emit(agent_thinking(role, phase, msg, **data))
+
+    deps.thought_bus = ThoughtBus(_thought_emit)
+    set_bus(deps.thought_bus)
+
     saver = make_checkpointer(checkpoint_db)
     try:
         graph = build_graph_with_checkpointer(deps, saver)
@@ -413,6 +462,10 @@ def _resume_pipeline_thread(
         status = final.get("status", "") if isinstance(final, dict) else ""
         if status == "paused_human":
             session.emit(checkpoint(task_id, final.get("human_feedback", "")))
+        elif status == "paused_question":
+            q = final.get("pending_question", {})
+            q["task_id"] = task_id
+            session.emit(agent_question(q))
         else:
             session.emit(complete(task_id, _summarize(final if isinstance(final, dict) else {})))
     except Exception as e:  # noqa: BLE001
@@ -422,6 +475,7 @@ def _resume_pipeline_thread(
             saver.conn.close()
         except Exception:  # noqa: BLE001
             pass
+        set_bus(None)
         session.pipeline_running = False
 
 

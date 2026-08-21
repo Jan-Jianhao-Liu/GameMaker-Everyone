@@ -13,8 +13,10 @@ from __future__ import annotations
 from collections.abc import Callable
 
 from agents.common.deps import AgentDeps
+from agents.common.questioning import check_question
 from agents.common.state import AgentState
 from agents.common.task_lock import AssetLock, LockError
+from agents.common.thought_bus import get_bus
 from agents.team_config import RoleConfig
 from plugins.executor import ChainExecutor
 
@@ -123,10 +125,29 @@ def make_artist3d_node(
     """构造 artist3d 节点函数。"""
 
     def artist3d_node(state: AgentState) -> dict:
+        bus = get_bus()
         task_id = state.get("task_id", "unknown")
         pending = _pending_models(state)
         if not pending:
             return {"current_role": "artist2d"}
+
+        if bus:
+            bus.think("artist3d", f"有 {len(pending)} 个模型资产待生产")
+
+        answered = state.get("answered_questions", [])
+        asked_roles = {q.get("role") for q in answered}
+        if bus and "artist3d" not in asked_roles:
+            q = check_question("artist3d", state)
+            if q is not None:
+                if bus:
+                    bus.think("artist3d", "缺少美术风格指引，向用户追问...")
+                return {
+                    "status": "paused_question",
+                    "pause_type": "question",
+                    "current_role": "artist3d",
+                    "pending_question": q.to_dict(),
+                    "human_feedback": q.question,
+                }
 
         gold = dict(state.get("gold_samples", {}))
         if _ASSET_TYPE not in gold:
@@ -147,10 +168,19 @@ def make_artist3d_node(
 
         produced: list[dict] = []
         for asset in pending:
+            asset_id = asset["asset_id"]
+            if bus:
+                bus.act("artist3d", f"生产模型 {asset_id}")
             result = _produce_one(deps, asset, task_id, role_config)
             if result is not None:
+                if bus:
+                    bus.result("artist3d", f"{asset_id} 生产完成")
                 produced.append(result)
+            elif bus:
+                bus.error("artist3d", f"{asset_id} 生产失败")
         next_role = "artist2d" if _has_pending_2d(state, produced) else "coder"
+        if bus:
+            bus.result("artist3d", f"共生产 {len(produced)} 个模型，转 {next_role}")
         return {
             "produced_assets": produced,
             "current_role": next_role,

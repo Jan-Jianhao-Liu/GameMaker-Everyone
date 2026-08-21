@@ -259,3 +259,56 @@ main { display: flex; flex: 1; overflow: hidden; }
 .test-result { font-size: 12px; color: var(--text-dim); flex: 1; }
 .test-result.ok { color: var(--accent2); }
 .test-result.fail { color: var(--error); }
+
+/* ---------- 思考过程 ---------- */
+.think-block {
+  margin: 8px 0; padding: 8px 12px; border-left: 3px solid var(--accent);
+  background: rgba(91, 141, 239, 0.06); border-radius: 0 6px 6px 0;
+}
+.think-line {
+  display: flex; align-items: baseline; gap: 6px; padding: 2px 0;
+  font-size: 13px; line-height: 1.5;
+}
+.think-icon { flex-shrink: 0; font-size: 14px; }
+.think-role { flex-shrink: 0; color: var(--accent); font-weight: 600; min-width: 48px; }
+.think-msg { flex: 1; color: var(--text); }
+.think-meta { color: var(--text-dim); font-size: 11px; margin-left: 8px; }
+.think-thinking .think-msg { color: var(--text-dim); font-style: italic; }
+.think-action .think-msg { color: var(--warn); }
+.think-result .think-msg { color: var(--accent2); }
+.think-error .think-msg { color: var(--error); }
+
+/* ---------- 智能体追问 ---------- */
+.question-card {
+  margin: 12px 0; padding: 16px; background: var(--surface2);
+  border: 1px solid var(--accent); border-radius: 8px;
+  box-shadow: 0 2px 12px rgba(91, 141, 239, 0.15);
+}
+.question-header {
+  display: flex; align-items: center; gap: 8px; margin-bottom: 10px;
+}
+.q-icon { font-size: 18px; }
+.q-role { font-weight: 700; color: var(--accent); }
+.q-title { color: var(--warn); font-size: 13px; }
+.question-body { margin-left: 4px; }
+.q-text { color: var(--text); line-height: 1.6; margin-bottom: 12px; }
+.q-options { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
+.q-option {
+  display: flex; flex-direction: column; gap: 2px; text-align: left;
+  padding: 10px 14px; background: var(--surface); border: 1px solid var(--border);
+  border-radius: 6px; cursor: pointer; color: var(--text); transition: all 0.15s;
+}
+.q-option:hover { border-color: var(--accent); background: rgba(91, 141, 239, 0.1); }
+.q-opt-label { font-weight: 600; font-size: 14px; }
+.q-opt-desc { font-size: 12px; color: var(--text-dim); }
+.q-input-row { display: flex; gap: 8px; }
+.q-input {
+  flex: 1; padding: 8px 12px; background: var(--bg); border: 1px solid var(--border);
+  border-radius: 5px; color: var(--text); font-size: 13px;
+}
+.q-input:focus { border-color: var(--accent); outline: none; }
+.q-send {
+  padding: 8px 16px; background: var(--accent); color: white;
+  border: none; border-radius: 5px; cursor: pointer; font-size: 13px;
+}
+.q-send:hover { background: #4a7de0; }
