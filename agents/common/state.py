@@ -27,8 +27,11 @@ class AgentState(TypedDict, total=False):
     - errors: 校验错误信息列表（累加）
     - retries: {role: count} 各角色重试计数
     - current_role: 当前正在执行的角色（supervisor 退回时改写）
-    - status: running | paused_human | completed | failed
+    - status: running | paused_human | paused_question | completed | failed
     - human_feedback: 人工卡点反馈（GDD 确认 / 三轮超限 / 金样本 / 发布）
+    - pause_type: 暂停类型（checkpoint | question），用于前端区分 UI
+    - pending_question: 当前待回答的追问（dict: role/question/options/context）
+    - answered_questions: 已回答的追问列表（累加）
     """
 
     task_id: str
@@ -45,3 +48,6 @@ class AgentState(TypedDict, total=False):
     current_role: RoleName
     status: str
     human_feedback: str
+    pause_type: str
+    pending_question: dict
+    answered_questions: Annotated[list[dict], operator.add]

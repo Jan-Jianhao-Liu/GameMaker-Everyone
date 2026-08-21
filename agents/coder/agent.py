@@ -14,6 +14,7 @@ from collections.abc import Callable
 
 from agents.common.deps import AgentDeps
 from agents.common.state import AgentState
+from agents.common.thought_bus import get_bus
 from agents.team_config import RoleConfig
 from plugins.executor import ChainExecutor
 
@@ -26,6 +27,7 @@ def make_coder_node(
     """构造 coder 节点函数。"""
 
     def coder_node(state: AgentState) -> dict:
+        bus = get_bus()
         task_id = state.get("task_id", "unknown")
         key = deps.key_for("coder")
         produced = state.get("produced_assets", [])
@@ -35,22 +37,36 @@ def make_coder_node(
         if existing_build.get("status") in ("pending_release", "release"):
             return {"current_role": "qa"}
 
+        if bus:
+            bus.think("coder", f"导入 {len(produced)} 个资产并构建游戏")
+
         for asset in produced:
+            asset_id = asset["asset_id"]
+            if bus:
+                bus.act("coder", f"导入资产 {asset_id}")
             r = deps.gateway.call(
-                "coder", key, "import_asset", {"asset_id": asset["asset_id"], "path": asset["path"]}
+                "coder", key, "import_asset", {"asset_id": asset_id, "path": asset["path"]}
             )
             if r.get("status") != "ok":
+                if bus:
+                    bus.error("coder", f"导入 {asset_id} 失败")
                 deps.repo.save_task_memory(
                     "coder", task_id, "import_asset", "error", str(r.get("error"))
                 )
                 return {
-                    "errors": [f"导入资产 {asset['asset_id']} 失败: {r.get('error')}"],
+                    "errors": [f"导入资产 {asset_id} 失败: {r.get('error')}"],
                     "current_role": "coder",
                 }
 
+        if bus:
+            bus.act("coder", "创建场景 + 编写脚本 + 构建导出")
         if not _run_build_chain(deps, gdd, key, task_id, role_config):
+            if bus:
+                bus.error("coder", "构建失败")
             return {"errors": ["构建失败"], "current_role": "coder"}
 
+        if bus:
+            bus.result("coder", f"构建完成（draft），输出到 {_BUILD_OUTPUT}")
         deps.repo.save_task_memory("coder", task_id, "build", "ok", "构建完成（draft）")
         return {
             "build_result": {"path": _BUILD_OUTPUT, "status": "draft"},

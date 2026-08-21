@@ -14,6 +14,7 @@ from collections.abc import Callable
 from agents.common.deps import AgentDeps
 from agents.common.state import AgentState
 from agents.common.task_lock import AssetLock, LockError
+from agents.common.thought_bus import get_bus
 from agents.team_config import RoleConfig
 from plugins.executor import ChainExecutor
 
@@ -117,10 +118,14 @@ def make_artist2d_node(
     """构造 artist2d 节点函数。"""
 
     def artist2d_node(state: AgentState) -> dict:
+        bus = get_bus()
         task_id = state.get("task_id", "unknown")
         pending = _pending_2d(state)
         if not pending:
             return {"current_role": "coder"}
+
+        if bus:
+            bus.think("artist2d", f"有 {len(pending)} 个 2D 资产待生产")
 
         gold = dict(state.get("gold_samples", {}))
         if "texture" not in gold:
@@ -141,9 +146,18 @@ def make_artist2d_node(
 
         produced: list[dict] = []
         for asset in pending:
+            asset_id = asset["asset_id"]
+            if bus:
+                bus.act("artist2d", f"生产 {asset.get('type', '2D')} 资产 {asset_id}")
             result = _produce_one(deps, asset, task_id, role_config)
             if result is not None:
+                if bus:
+                    bus.result("artist2d", f"{asset_id} 生产完成")
                 produced.append(result)
+            elif bus:
+                bus.error("artist2d", f"{asset_id} 生产失败")
+        if bus:
+            bus.result("artist2d", f"共生产 {len(produced)} 个 2D 资产，转 coder")
         return {
             "produced_assets": produced,
             "current_role": "coder",

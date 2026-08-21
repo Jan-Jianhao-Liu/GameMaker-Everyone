@@ -39,7 +39,7 @@ _NODE_FACTORIES = {
     "qa": make_qa_node,
 }
 
-_TERMINAL_STATUSES = {"paused_human", "completed", "failed"}
+_TERMINAL_STATUSES = {"paused_human", "paused_question", "completed", "failed"}
 
 
 def _make_route(role_ids: set[str]):

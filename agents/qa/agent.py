@@ -11,6 +11,7 @@ from collections.abc import Callable
 
 from agents.common.deps import AgentDeps
 from agents.common.state import AgentState
+from agents.common.thought_bus import get_bus
 from agents.team_config import RoleConfig
 from plugins.executor import ChainExecutor
 
@@ -21,31 +22,45 @@ def make_qa_node(
     """构造 qa 节点函数。"""
 
     def qa_node(state: AgentState) -> dict:
+        bus = get_bus()
         task_id = state.get("task_id", "unknown")
         key = deps.key_for("qa")
         build = state.get("build_result", {})
         build_path = build.get("path", "")
 
+        if bus:
+            bus.think("qa", f"测试构建包: {build_path}")
+
         ok, result = _run_test(deps, build_path, key, role_config)
         if not ok:
+            if bus:
+                bus.error("qa", f"测试执行失败: {result}")
             deps.repo.save_task_memory("qa", task_id, "test", "error", str(result))
             return {"errors": [f"测试执行失败: {result}"], "current_role": "qa"}
 
         defects = result.get("defects", [])
+        if bus:
+            bus.result("qa", f"测试完成，发现 {len(defects)} 个缺陷")
         deps.repo.save_task_memory(
             "qa", task_id, "test", "ok" if not defects else "fail", f"发现 {len(defects)} 个缺陷"
         )
 
         if defects:
+            if bus:
+                bus.act("qa", f"退回 coder 修复 {len(defects)} 个缺陷")
             return {"defects": defects, "current_role": "coder"}
 
         build = dict(state.get("build_result", {}))
         if build.get("status") == "pending_release":
             build["status"] = "release"
+            if bus:
+                bus.result("qa", "构建包已发布（release）")
             deps.repo.save_task_memory("qa", task_id, "release", "ok", "已发布")
             return {"build_result": build, "status": "completed", "current_role": "qa"}
 
         build["status"] = "pending_release"
+        if bus:
+            bus.act("qa", "测试通过，等待发布确认")
         return {
             "build_result": build,
             "defects": [],

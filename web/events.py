@@ -4,12 +4,15 @@
   chat              自由对话
   make_game         触发 make-game 流水线
   checkpoint_response  人工卡点确认
+  question_response    智能体追问回答
   resume            恢复中断的流水线
 
 后端 → 前端（ServerEvent）：
   team_reply        团队回复文本
   role_status       角色状态更新
   progress          节点完成进度
+  agent_thinking    智能体思考过程
+  agent_question    智能体追问
   checkpoint        人工卡点请求
   complete          流水线完成
   error             错误
@@ -60,6 +63,20 @@ def role_status(role: str, status: str, detail: str = "") -> ServerEvent:
 
 def progress(node: str, update: dict[str, Any]) -> ServerEvent:
     return ServerEvent("progress", {"node": node, "update": update})
+
+
+def agent_thinking(
+    role: str, phase: str, message: str, **extra: Any,
+) -> ServerEvent:
+    """智能体思考过程事件。phase: thinking|action|result|error。"""
+    return ServerEvent("agent_thinking", {
+        "role": role, "phase": phase, "message": message, **extra,
+    })
+
+
+def agent_question(question: dict[str, Any]) -> ServerEvent:
+    """智能体追问事件。question 含 role/header/question/options/context。"""
+    return ServerEvent("agent_question", {"question": question})
 
 
 def checkpoint(task_id: str, message: str) -> ServerEvent:
