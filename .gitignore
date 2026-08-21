@@ -30,3 +30,7 @@ Desktop.ini
 experiment.py
 experiment2.py
 debug_*.py
+
+# Godot project
+game_projects/*/.godot/
+game_projects/*/run_test*.log
