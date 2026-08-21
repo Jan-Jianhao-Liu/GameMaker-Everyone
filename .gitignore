@@ -17,6 +17,8 @@ __pycache__/
 logs/
 experiment_output/
 experiment2_output/
+experiment_complex_output/
+experiment_ablation_output/
 real_build_output/
 
 # OS
