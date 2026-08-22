@@ -1,0 +1,234 @@
+[gd_scene load_steps=3 format=3 uid="uid://temple_of_eclipse_main"]
+
+[ext_resource type="Script" path="res://scripts/game_manager.gd" id="1_gm"]
+[ext_resource type="Script" path="res://scripts/ui.gd" id="2_ui"]
+
+[node name="Main" type="Node3D"]
+
+[node name="GameManager" type="Node3D" parent="."]
+script = ExtResource("1_gm")
+
+[node name="UI" type="Control" parent="."]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("2_ui")
+
+[node name="TopLeft" type="Panel" parent="UI"]
+offset_left = 10.0
+offset_top = 10.0
+offset_right = 280.0
+offset_bottom = 110.0
+
+[node name="HealthBar" type="ProgressBar" parent="UI/TopLeft"]
+offset_left = 10.0
+offset_top = 10.0
+offset_right = 260.0
+offset_bottom = 30.0
+value = 100.0
+show_percentage = false
+
+[node name="HealthLabel" type="Label" parent="UI/TopLeft"]
+offset_left = 10.0
+offset_top = 32.0
+offset_right = 260.0
+offset_bottom = 48.0
+text = "100 / 100"
+horizontal_alignment = 1
+
+[node name="ManaBar" type="ProgressBar" parent="UI/TopLeft"]
+offset_left = 10.0
+offset_top = 55.0
+offset_right = 260.0
+offset_bottom = 75.0
+value = 100.0
+show_percentage = false
+
+[node name="ManaLabel" type="Label" parent="UI/TopLeft"]
+offset_left = 10.0
+offset_top = 77.0
+offset_right = 260.0
+offset_bottom = 93.0
+text = "100 / 100"
+horizontal_alignment = 1
+
+[node name="TopRight" type="Panel" parent="UI"]
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -280.0
+offset_top = 10.0
+offset_right = -10.0
+offset_bottom = 110.0
+
+[node name="ScoreLabel" type="Label" parent="UI/TopRight"]
+offset_left = 10.0
+offset_top = 10.0
+offset_right = 260.0
+offset_bottom = 35.0
+text = "分数: 0"
+horizontal_alignment = 1
+
+[node name="EnemyLabel" type="Label" parent="UI/TopRight"]
+offset_left = 10.0
+offset_top = 40.0
+offset_right = 260.0
+offset_bottom = 65.0
+text = "击杀: 0 / 0"
+horizontal_alignment = 1
+
+[node name="BossContainer" type="Panel" parent="UI"]
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -200.0
+offset_top = 20.0
+offset_right = 200.0
+offset_bottom = 90.0
+
+[node name="BossLabel" type="Label" parent="UI/BossContainer"]
+offset_left = 10.0
+offset_top = 5.0
+offset_right = 390.0
+offset_bottom = 22.0
+text = "神殿守护者"
+horizontal_alignment = 1
+
+[node name="BossBar" type="ProgressBar" parent="UI/BossContainer"]
+offset_left = 10.0
+offset_top = 25.0
+offset_right = 390.0
+offset_bottom = 50.0
+value = 100.0
+show_percentage = false
+
+[node name="PhaseLabel" type="Label" parent="UI/BossContainer"]
+offset_left = 10.0
+offset_top = 55.0
+offset_right = 390.0
+offset_bottom = 70.0
+text = "第一阶段"
+horizontal_alignment = 1
+
+[node name="Crosshair" type="CenterContainer" parent="UI"]
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -10.0
+offset_top = -10.0
+offset_right = 10.0
+offset_bottom = 10.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="CrosshairDot" type="ColorRect" parent="UI/Crosshair"]
+custom_minimum_size = Vector2(4, 4)
+color = Color(1, 1, 1, 0.6)
+
+[node name="Center" type="CenterContainer" parent="UI"]
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -300.0
+offset_top = -100.0
+offset_right = 300.0
+offset_bottom = 100.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="MessageLabel" type="Label" parent="UI/Center"]
+offset_left = 0.0
+offset_top = 0.0
+offset_right = 600.0
+offset_bottom = 80.0
+text = ""
+horizontal_alignment = 1
+vertical_alignment = 1
+theme_override_font_sizes/font_size = 28
+
+[node name="BottomBar" type="HBoxContainer" parent="UI"]
+anchor_left = 0.5
+anchor_right = 0.5
+anchor_bottom = 1.0
+offset_left = -180.0
+offset_top = -80.0
+offset_right = 180.0
+offset_bottom = -10.0
+grow_horizontal = 2
+grow_vertical = 0
+alignment = 1
+
+[node name="SkillAttack" type="Panel" parent="UI/BottomBar"]
+custom_minimum_size = Vector2(100, 70)
+
+[node name="Label" type="Label" parent="UI/BottomBar/SkillAttack"]
+offset_left = 0.0
+offset_top = 5.0
+offset_right = 100.0
+offset_bottom = 25.0
+text = "攻击"
+horizontal_alignment = 1
+
+[node name="Key" type="Label" parent="UI/BottomBar/SkillAttack"]
+offset_left = 0.0
+offset_top = 35.0
+offset_right = 100.0
+offset_bottom = 60.0
+text = "左键"
+horizontal_alignment = 1
+theme_override_font_sizes/font_size = 20
+
+[node name="SkillMagic" type="Panel" parent="UI/BottomBar"]
+custom_minimum_size = Vector2(100, 70)
+
+[node name="Label" type="Label" parent="UI/BottomBar/SkillMagic"]
+offset_left = 0.0
+offset_top = 5.0
+offset_right = 100.0
+offset_bottom = 25.0
+text = "魔法"
+horizontal_alignment = 1
+
+[node name="Key" type="Label" parent="UI/BottomBar/SkillMagic"]
+offset_left = 0.0
+offset_top = 35.0
+offset_right = 100.0
+offset_bottom = 60.0
+text = "Q"
+horizontal_alignment = 1
+theme_override_font_sizes/font_size = 20
+
+[node name="SkillDodge" type="Panel" parent="UI/BottomBar"]
+custom_minimum_size = Vector2(100, 70)
+
+[node name="Label" type="Label" parent="UI/BottomBar/SkillDodge"]
+offset_left = 0.0
+offset_top = 5.0
+offset_right = 100.0
+offset_bottom = 25.0
+text = "闪避"
+horizontal_alignment = 1
+
+[node name="Key" type="Label" parent="UI/BottomBar/SkillDodge"]
+offset_left = 0.0
+offset_top = 35.0
+offset_right = 100.0
+offset_bottom = 60.0
+text = "空格"
+horizontal_alignment = 1
+theme_override_font_sizes/font_size = 20
+
+[node name="Hints" type="Label" parent="UI"]
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -200.0
+offset_top = 120.0
+offset_right = 200.0
+offset_bottom = 160.0
+text = "WASD移动 | 鼠标视角 | ESC暂停"
+horizontal_alignment = 1
+grow_horizontal = 2
