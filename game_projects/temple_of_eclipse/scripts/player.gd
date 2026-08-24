@@ -35,6 +35,7 @@ signal attack_slash(pos: Vector3, dir: Vector3)
 
 func _ready() -> void:
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+	camera.current = true
 	emit_signal("health_changed", health, max_health)
 	emit_signal("mana_changed", mana, max_mana)
 	emit_signal("score_changed", score)

@@ -98,16 +98,16 @@ func _build_temple_architecture() -> void:
 	for pos in statue_positions:
 		var statue := _load_model(STATUE_SCENE)
 		statue.position = pos
-		statue.look_at(Vector3(0, pos.y, 0))
 		add_child(statue)
+		statue.look_at(Vector3(0, pos.y, 0))
 
 	for i in range(8):
 		var angle := (i / 8.0) * TAU
 		var dp := _load_model(DECORATIVE_PILLAR_SCENE)
 		dp.position = Vector3(cos(angle) * 20, 0, sin(angle) * 20)
+		add_child(dp)
 		dp.look_at(Vector3(0, 0, 0))
 		dp.rotation.y += PI
-		add_child(dp)
 
 	var altar := _load_model(ALTAR_SCENE)
 	altar.position = Vector3(0, 0, -18)
@@ -157,7 +157,7 @@ func _load_model(path: String) -> Node3D:
 	return node
 
 func _spawn_player() -> void:
-	var player_node := _load_model(ADVENTURER_SCENE)
+	var player_node := CharacterBody3D.new()
 	var player_script := load("res://scripts/player.gd")
 	player_node.set_script(player_script)
 
@@ -175,6 +175,8 @@ func _spawn_player() -> void:
 
 	var model_holder := Node3D.new()
 	model_holder.name = "Model"
+	var player_model := _load_model(ADVENTURER_SCENE)
+	model_holder.add_child(player_model)
 	player_node.add_child(model_holder)
 
 	var attack_area := Area3D.new()
@@ -220,7 +222,7 @@ func _spawn_enemies() -> void:
 	emit_signal("enemy_count_changed", enemies_killed, total_enemies)
 
 func _create_enemy(model_path: String, pos: Vector3, hp: int, dmg: int, spd: float) -> CharacterBody3D:
-	var enemy_node := _load_model(model_path)
+	var enemy_node := CharacterBody3D.new()
 	var enemy_script := load("res://scripts/enemy.gd")
 	enemy_node.set_script(enemy_script)
 
@@ -233,6 +235,8 @@ func _create_enemy(model_path: String, pos: Vector3, hp: int, dmg: int, spd: flo
 
 	var model_holder := Node3D.new()
 	model_holder.name = "Model"
+	var enemy_model := _load_model(model_path)
+	model_holder.add_child(enemy_model)
 	enemy_node.add_child(model_holder)
 
 	enemy_node.position = pos
@@ -254,7 +258,7 @@ func _on_enemy_killed(enemy_node: CharacterBody3D) -> void:
 
 func _spawn_boss() -> void:
 	boss_spawned = true
-	var boss_node := _load_model(BOSS_SCENE)
+	var boss_node := CharacterBody3D.new()
 	var boss_script := load("res://scripts/boss.gd")
 	boss_node.set_script(boss_script)
 
@@ -267,6 +271,8 @@ func _spawn_boss() -> void:
 
 	var model_holder := Node3D.new()
 	model_holder.name = "Model"
+	var boss_model := _load_model(BOSS_SCENE)
+	model_holder.add_child(boss_model)
 	boss_node.add_child(model_holder)
 
 	boss_node.position = Vector3(0, 2, -18)
