@@ -2,6 +2,7 @@
 
 所有文件操作限制在 game/ 与 sandbox/ 目录内，realpath 检查路径穿越。
 危险操作（批量删除、任意 shell）一律拒绝。
+godot-ai 的 batch_execute 等安全工具通过白名单豁免。
 """
 
 from __future__ import annotations
@@ -12,7 +13,14 @@ from pathlib import Path
 _DANGEROUS_TOOL_PATTERNS = re.compile(
     r"(delete|remove|rm_|shell|exec|eval|system|popen)", re.IGNORECASE
 )
-_DANGEROUS_PARAM_KEYS = {"cmd", "shell", "command", "script", "code"}
+_SAFE_TOOL_ALLOWLIST = {
+    "batch_execute",
+    "script_create",
+    "script_patch",
+    "script_attach",
+    "script_manage",
+}
+_DANGEROUS_PARAM_KEYS = {"cmd", "shell", "command", "code"}
 _PATH_PARAM_KEYS = {"path", "fbx_path", "json_path", "file_path", "out"}
 
 
@@ -43,7 +51,7 @@ class Sandbox:
 
     def check_tool(self, tool: str, params: dict) -> None:
         """检查工具调用是否安全。不安全抛 SandboxError。"""
-        if _DANGEROUS_TOOL_PATTERNS.search(tool):
+        if tool not in _SAFE_TOOL_ALLOWLIST and _DANGEROUS_TOOL_PATTERNS.search(tool):
             raise SandboxError(f"危险工具名被拒: {tool}")
         for key, value in params.items():
             if key in _DANGEROUS_PARAM_KEYS:

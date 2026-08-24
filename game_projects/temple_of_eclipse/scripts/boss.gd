@@ -24,6 +24,7 @@ var slam_timer: float = 3.0
 var is_slamming: bool = false
 var is_special: bool = false
 var enraged: bool = false
+var _bt: Node = null
 
 signal boss_health_changed(h: int, mh: int)
 signal boss_phase_changed(phase: int)
@@ -38,26 +39,89 @@ func _ready() -> void:
 	add_to_group("boss")
 	emit_signal("boss_health_changed", health, max_health)
 	emit_signal("boss_phase_changed", boss_phase)
+	_build_behavior_tree()
+
+func _build_behavior_tree() -> void:
+	var tree := BeehaveTree.new()
+	tree.name = "BossBT"
+	tree.actor_node_path = NodePath(".")
+	tree.process_thread = BeehaveTree.ProcessThread.PHYSICS
+	add_child(tree)
+
+	var root := Sequence.new()
+	root.name = "Root"
+	tree.add_child(root)
+
+	var tick_timers := ActionLeaf.new()
+	tick_timers.name = "TickTimers"
+	tick_timers.set_script(load("res://scripts/boss_ai/act_tick_timers.gd"))
+	root.add_child(tick_timers)
+
+	var priority := Selector.new()
+	priority.name = "Priority"
+	root.add_child(priority)
+
+	var special_seq := Sequence.new()
+	special_seq.name = "Special"
+	var can_special := ConditionLeaf.new()
+	can_special.set_script(load("res://scripts/boss_ai/cond_can_special.gd"))
+	var do_special := ActionLeaf.new()
+	do_special.set_script(load("res://scripts/boss_ai/act_perform_special.gd"))
+	special_seq.add_child(can_special)
+	special_seq.add_child(do_special)
+	priority.add_child(special_seq)
+
+	var slam_seq := Sequence.new()
+	slam_seq.name = "Slam"
+	var can_slam := ConditionLeaf.new()
+	can_slam.set_script(load("res://scripts/boss_ai/cond_can_slam.gd"))
+	var do_slam := ActionLeaf.new()
+	do_slam.set_script(load("res://scripts/boss_ai/act_perform_slam.gd"))
+	slam_seq.add_child(can_slam)
+	slam_seq.add_child(do_slam)
+	priority.add_child(slam_seq)
+
+	var attack_seq := Sequence.new()
+	attack_seq.name = "Attack"
+	var in_range := ConditionLeaf.new()
+	in_range.set_script(load("res://scripts/boss_ai/cond_in_attack_range.gd"))
+	var can_attack := ConditionLeaf.new()
+	can_attack.set_script(load("res://scripts/boss_ai/cond_can_attack.gd"))
+	var do_attack := ActionLeaf.new()
+	do_attack.set_script(load("res://scripts/boss_ai/act_perform_attack.gd"))
+	attack_seq.add_child(in_range)
+	attack_seq.add_child(can_attack)
+	attack_seq.add_child(do_attack)
+	priority.add_child(attack_seq)
+
+	var move_seq := Sequence.new()
+	move_seq.name = "Move"
+	var target_alive := ConditionLeaf.new()
+	target_alive.set_script(load("res://scripts/boss_ai/cond_target_alive.gd"))
+	var do_move := ActionLeaf.new()
+	do_move.set_script(load("res://scripts/boss_ai/act_move_to_target.gd"))
+	move_seq.add_child(target_alive)
+	move_seq.add_child(do_move)
+	priority.add_child(move_seq)
+
+	_bt = tree
 
 func _physics_process(delta: float) -> void:
 	if not is_alive or not target or target.health <= 0:
 		return
-
+	if _bt and _bt.enabled:
+		return
 	if hit_flash > 0:
 		hit_flash -= delta
 		visible = int(hit_flash * 20) % 2 == 0
-
 	_update_phase()
-
 	var to_target := target.global_position - global_position
 	var dist := to_target.length()
 	var current_speed := _get_current_speed()
-
 	if is_slamming or is_special:
 		velocity = Vector3.ZERO
 		move_and_slide()
 		return
-
 	if dist > ATTACK_RANGE:
 		velocity = to_target.normalized() * current_speed
 		move_and_slide()
@@ -68,14 +132,11 @@ func _physics_process(delta: float) -> void:
 		move_and_slide()
 		if attack_timer <= 0:
 			_perform_attack()
-
 	if attack_timer > 0:
 		attack_timer -= delta
-
 	special_timer -= delta
 	if special_timer <= 0 and not is_special and not is_slamming:
 		_perform_special()
-
 	slam_timer -= delta
 	if slam_timer <= 0 and not is_slamming and not is_special:
 		_perform_slam()

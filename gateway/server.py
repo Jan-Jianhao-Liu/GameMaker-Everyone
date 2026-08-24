@@ -1,7 +1,7 @@
 """MCP 网关入口：Gateway 核心类 + SQLite 审计 + 端口探测。
 
 Gateway.call(role, api_key, tool, params) 流程：
-鉴权 → 路由 → 沙箱 → 速率限制 → 转发 → 审计
+鉴权 → 路由 → 沙箱 → 速率限制 → pre_tool hook → 转发 → post_tool hook → 审计
 越权/越界/超限均拒绝并记审计日志。
 """
 
@@ -22,10 +22,11 @@ from gateway.router import ToolRouteError, route
 from gateway.sandbox import Sandbox, SandboxError
 
 _ROOT = Path(__file__).resolve().parents[1]
+_AUDIT_RING_MAX = 200
 
 
 class AuditDB:
-    """SQLite 审计表 + 查询 API。持久连接 + WAL + Lock。"""
+    """SQLite 审计表 + 查询 API + 内存审计环。持久连接 + WAL + Lock。"""
 
     def __init__(self, db_path: Path) -> None:
         self.db_path = db_path
@@ -39,24 +40,30 @@ class AuditDB:
             "params TEXT, status TEXT NOT NULL, error TEXT)"
         )
         self._lock = threading.Lock()
+        self._ring: list[dict] = []
 
     def log(
         self, role: str, tool: str, params: dict, status: str, error: str | None = None
     ) -> None:
+        entry = {
+            "ts": datetime.now().isoformat(),
+            "role": role,
+            "tool": tool,
+            "params": json.dumps(params, ensure_ascii=False, default=str)[:500],
+            "status": status,
+            "error": error,
+        }
         with self._lock:
             self._conn.execute(
                 "INSERT INTO audit (ts, role, tool, params, status, error) "
                 "VALUES (?, ?, ?, ?, ?, ?)",
-                (
-                    datetime.now().isoformat(),
-                    role,
-                    tool,
-                    json.dumps(params, ensure_ascii=False, default=str)[:500],
-                    status,
-                    error,
-                ),
+                (entry["ts"], entry["role"], entry["tool"],
+                 entry["params"], entry["status"], entry["error"]),
             )
             self._conn.commit()
+            self._ring.append(entry)
+            if len(self._ring) > _AUDIT_RING_MAX:
+                self._ring = self._ring[-_AUDIT_RING_MAX:]
 
     def query(self, role: str | None = None, limit: int = 100) -> list[dict]:
         with self._lock:
@@ -72,12 +79,17 @@ class AuditDB:
                 ).fetchall()
         return [dict(r) for r in rows]
 
+    def recent(self, n: int = 50) -> list[dict]:
+        """审计环：返回最近 n 条工具调用记录（内存，无 DB 查询）。"""
+        with self._lock:
+            return list(self._ring[-n:])
+
 
 Forwarder = Callable[[str, str, dict[str, Any]], Any]
 
 
 class Gateway:
-    """MCP 网关核心：鉴权 · 路由 · 沙箱 · 速率限制 · 审计 · 转发。"""
+    """MCP 网关核心：鉴权 · 路由 · 沙箱 · 速率限制 · Hook · 审计 · 转发。"""
 
     def __init__(
         self,
@@ -86,12 +98,14 @@ class Gateway:
         rate_limiter: RateLimiter,
         audit: AuditDB,
         forwarder: Forwarder,
+        hooks: Any = None,
     ) -> None:
         self._auth = auth
         self._sandbox = sandbox
         self._rate = rate_limiter
         self._audit = audit
         self._forward = forwarder
+        self._hooks = hooks
 
     def call(self, role: str, api_key: str, tool: str, params: dict[str, Any]) -> dict[str, Any]:
         """智能体调用入口。返回 {"status": "ok"/"error", ...}。"""
@@ -109,13 +123,40 @@ class Gateway:
         except (AuthError, ToolRouteError, SandboxError) as e:
             self._audit.log(role, tool, params, "rejected", str(e))
             return {"status": "error", "error": str(e)}
+
+        if self._hooks is not None:
+            replaced = self._hooks.fire_pre_tool(role, tool, params)
+            if replaced is not None:
+                params = replaced
+
         try:
             result = self._forward(server, tool, params)
             self._audit.log(role, tool, params, "ok")
-            return {"status": "ok", "result": result}
+            response = {"status": "ok", "result": result}
+            if self._hooks is not None:
+                response = self._hooks.fire_post_tool(role, tool, params, response)
+            return response
         except Exception as e:  # noqa: BLE001
             self._audit.log(role, tool, params, "error", str(e))
             return {"status": "error", "error": str(e)}
+
+    def recent_audit(self, n: int = 50) -> list[dict]:
+        """审计环：返回最近 n 条工具调用记录。"""
+        return self._audit.recent(n)
+
+    @property
+    def effort(self) -> str:
+        """当前 AI-effort 级别。"""
+        return self._auth.effort
+
+    @effort.setter
+    def effort(self, value: str) -> None:
+        """动态调整 AI-effort 级别（影响工具列表裁剪）。"""
+        self._auth.effort = value
+
+    def allowed_tools(self, role: str) -> set[str]:
+        """获取角色在当前 effort 下的可用工具集。"""
+        return self._auth.allowed_tools(role)
 
 
 def check_port_available(port: int, host: str = "127.0.0.1") -> bool:

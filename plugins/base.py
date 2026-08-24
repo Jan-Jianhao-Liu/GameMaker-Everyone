@@ -9,11 +9,20 @@ from typing import Any
 
 @dataclass
 class ToolDef:
-    """工具描述。"""
+    """工具描述。
+
+    属性:
+      readonly: 只读工具（不修改项目状态），如 editor_screenshot/logs_read
+      destructive: 破坏性工具（删除/覆盖），需额外确认
+      category: 工具分类（scene/node/script/resource/editor/runtime/...）
+    """
 
     name: str
     description: str = ""
     params: dict[str, Any] = field(default_factory=dict)
+    readonly: bool = False
+    destructive: bool = False
+    category: str = ""
 
 
 @dataclass
