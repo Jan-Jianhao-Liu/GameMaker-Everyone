@@ -13,6 +13,9 @@ window/size/viewport_width=1280
 window/size/viewport_height=720
 window/size/window_title_override="地牢探险者 - Dungeon Explorer"
 
+[editor_plugins]
+enabled=PackedStringArray("godot_ai")
+
 [input]
 move_forward={
 "deadzone": 0.5,

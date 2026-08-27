@@ -34,5 +34,20 @@
     "port": 19879,
     "enabled": true,
     "config": {}
+  },
+  {
+    "id": "godot_ai",
+    "class": "plugins.builtin.godot_ai.GodotAIPlugin",
+    "name": "Godot-AI 3.1.5",
+    "type": "game_engine",
+    "port": 8001,
+    "enabled": true,
+    "config": {
+      "endpoint": "http://127.0.0.1:8001/mcp",
+      "ws_port": 9501,
+      "transport": "streamable-http",
+      "package": "godot-ai==3.1.5",
+      "start_command": "uvx --from \"godot-ai==3.1.5\" godot-ai --transport streamable-http --port 8001 --ws-port 9501"
+    }
   }
 ]

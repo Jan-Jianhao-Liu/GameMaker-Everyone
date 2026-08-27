@@ -18,12 +18,15 @@ from pathlib import Path
 from typing import Any
 
 from agents.common.deps import AgentDeps
+from agents.common.hooks import HookEngine
 from agents.common.llm import HybridLLM
 from agents.orchestrator import build_graph, build_graph_with_checkpointer, make_checkpointer
 from gateway.auth import RoleAuth
+from gateway.http_forwarder import HttpMcpForwarder, MultiForwarder
 from gateway.rate_limit import RateLimiter
 from gateway.sandbox import Sandbox
 from gateway.server import AuditDB, Gateway
+from plugins.registry import PluginRegistry
 from storage.sqlite_repo import SQLiteRepo
 
 _ROOT = Path(__file__).resolve().parents[1]
@@ -43,21 +46,53 @@ _ROLE_KEYS = {
 def _build_default_deps(
     api_keys: dict[str, str] | None = None,
     forwarder: Any = None,
+    effort: str = "high",
 ) -> AgentDeps:
-    """构造默认 deps。forwarder 为 None 时用占位（实机由 Prompt 7 注入真实转发）。"""
+    """构造默认 deps。forwarder 为 None 时用占位（实机由 Prompt 7 注入真实转发）。
+
+    Args:
+        effort: AI-effort 滑块 ("low"/"medium"/"high")，控制工具列表裁剪。
+    """
     repo = SQLiteRepo(_REPO_DIR / "gaf.db")
     keys = api_keys or _ROLE_KEYS
-    auth = RoleAuth({v: k for k, v in keys.items()})
+    auth = RoleAuth({v: k for k, v in keys.items()}, effort=effort)
     sandbox = Sandbox([_ROOT / "game", _ROOT / "sandbox"])
     rate = RateLimiter(_REPO_DIR / "rate.db")
     audit = AuditDB(_REPO_DIR / "audit.db")
 
-    def _stub_forwarder(server: str, tool: str, params: dict) -> dict:
-        return {"status": "error", "error": f"forwarder 未配置（server={server}）"}
+    registry = PluginRegistry()
+    registry.load()
 
-    gw = Gateway(auth, sandbox, rate, audit, forwarder or _stub_forwarder)
+    hooks = HookEngine()
+    hooks.add_post_tool(
+        "audit_log", "*",
+        lambda role, tool, params, result: None,
+    )
+
+    if forwarder is None:
+        multi = MultiForwarder()
+
+        godot_ai_plugin = registry.get("godot_ai")
+        if godot_ai_plugin is not None:
+            endpoint = godot_ai_plugin.config.get(
+                "endpoint", "http://127.0.0.1:8001/mcp",
+            )
+            multi.register("godot_ai", HttpMcpForwarder(endpoint))
+
+        def _stub_forwarder(server: str, tool: str, params: dict) -> dict:
+            return {"status": "error", "error": f"forwarder 未配置（server={server}）"}
+
+        multi.set_fallback(_stub_forwarder)
+        gw_forwarder = multi.dispatch
+    else:
+        gw_forwarder = forwarder
+
+    gw = Gateway(auth, sandbox, rate, audit, gw_forwarder, hooks=hooks)
     llm = HybridLLM()
-    return AgentDeps(llm=llm, gateway=gw, repo=repo, api_keys=keys)
+    return AgentDeps(
+        llm=llm, gateway=gw, repo=repo, api_keys=keys,
+        plugins=registry, hooks=hooks, effort=effort,
+    )
 
 
 def _stream_pipeline(
@@ -108,6 +143,7 @@ def make_game(
     resume_task_id: str | None = None,
     auto_confirm: bool = False,
     stream: Any = None,
+    effort: str = "high",
 ) -> dict[str, Any]:
     """make-game 核心逻辑。
 
@@ -119,6 +155,7 @@ def make_game(
         resume_task_id: 非空则从 checkpointer 恢复
         auto_confirm: 跳过用户确认（测试用）
         stream: 输出流（测试用）
+        effort: AI-effort 滑块 ("low"/"medium"/"high")
 
     Returns:
         最终状态 dict。
@@ -132,7 +169,7 @@ def make_game(
     if cloud_provider:
         os.environ["LLM_CLOUD_PROVIDER"] = cloud_provider
 
-    deps = deps or _build_default_deps()
+    deps = deps or _build_default_deps(effort=effort)
     _CHECKPOINT_DIR.mkdir(parents=True, exist_ok=True)
 
     if resume_task_id:
@@ -193,6 +230,11 @@ def main(argv: list[str] | None = None) -> int:
         "--cloud-provider", dest="cloud_provider",
         choices=["glm", "deepseek", "qwen"], help="云端 LLM 提供商",
     )
+    mk.add_argument(
+        "--effort", dest="effort",
+        choices=["low", "medium", "high"], default="high",
+        help="AI-effort 滑块: low=核心工具, medium=标准集, high=全部工具",
+    )
 
     args = parser.parse_args(argv)
 
@@ -203,12 +245,14 @@ def main(argv: list[str] | None = None) -> int:
                 resume_task_id=args.resume_task_id,
                 api_key=args.api_key,
                 cloud_provider=args.cloud_provider,
+                effort=args.effort,
             )
         elif args.request:
             make_game(
                 request=args.request,
                 api_key=args.api_key,
                 cloud_provider=args.cloud_provider,
+                effort=args.effort,
             )
         else:
             parser.error("make-game 需要需求文本或 --resume <task_id>")
